@@ -55,6 +55,46 @@ declare module 'dockerode' {
   export = Dockerode;
 }
 
+declare module 'e2b' {
+  interface SandboxOptions {
+    template?: string;
+    metadata?: Record<string, string>;
+    timeout?: number;
+  }
+
+  interface CodeExecutionResult {
+    logs?: {
+      stdout?: string[];
+      stderr?: string[];
+    };
+    error?: {
+      name: string;
+      value: string;
+      traceback: string;
+    };
+    results?: any[];
+  }
+
+  class Sandbox {
+    static create(options?: SandboxOptions): Promise<Sandbox>;
+    keepAlive(seconds: number): Promise<void>;
+    runCode(code: string, options?: { language?: string; timeout?: number }): Promise<CodeExecutionResult>;
+    kill(): Promise<void>;
+    id: string;
+    getFileSystem(): Promise<any>;
+    getPath(path: string): any;
+    commands: {
+      run(command: string, options?: { cwd?: string; env?: Record<string, string> }): Promise<{
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+      }>;
+    };
+  }
+
+  export { Sandbox, SandboxOptions, CodeExecutionResult };
+}
+
 declare module 'better-sqlite3' {
   class Database {
     constructor(filename: string, options?: any);

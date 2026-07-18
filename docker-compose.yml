@@ -14,21 +14,25 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - E2B_API_KEY=${E2B_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - IMAP_HOST=${IMAP_HOST}
+      - IMAP_PORT=${IMAP_PORT}
+      - IMAP_USER=${IMAP_USER}
+      - IMAP_PASS=${IMAP_PASS}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
 
-  # Browser service (noVNC) - Phase 6
-  # browser:
-  #   image: browserless/chrome
-  #   ports:
-  #     - "3002:3000"
-  #   restart: unless-stopped
-
-  # Sandbox service - Phase 9
-  # sandbox:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.sandbox
-  #   privileged: true
-  #   restart: unless-stopped
+  # Browser service (noVNC) - KasmWeb Chrome
+  browser:
+    image: kasmweb/chrome:1.15.0
+    ports:
+      - "6901:6901"
+    environment:
+      - VNC_PASSWORD=${VNC_PASSWORD:-changeme}
+      - KASM_DISABLE_AUTH=${KASM_DISABLE_AUTH:-1}
+    restart: unless-stopped

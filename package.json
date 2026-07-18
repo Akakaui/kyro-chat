@@ -1,5 +1,5 @@
 {
-  "name": "chatbot-saas",
+  "name": "kyro-chat",
   "private": true,
   "workspaces": [
     "apps/*",
