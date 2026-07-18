@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - FRONTEND_URL=http://localhost:3000
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # Browser service (noVNC) - Phase 6
+  # browser:
+  #   image: browserless/chrome
+  #   ports:
+  #     - "3002:3000"
+  #   restart: unless-stopped
+
+  # Sandbox service - Phase 9
+  # sandbox:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.sandbox
+  #   privileged: true
+  #   restart: unless-stopped

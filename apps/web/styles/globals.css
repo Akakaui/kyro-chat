@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg-primary: #0d0f11;
+  --color-bg-secondary: #141618;
+  --color-bg-tertiary: #1c1e20;
+  --color-bg-hover: #25262b;
+  --color-border: #2c2e33;
+  --color-text-primary: #e4e5e7;
+  --color-text-secondary: #909296;
+  --color-accent: #e8590c;
+  --color-accent-hover: #d4520e;
+  --color-success: #40c057;
+  --color-warning: #fab005;
+  --color-danger: #fa5252;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* Message streaming animation */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.streaming-indicator span {
+  animation: pulse-dot 1.4s infinite;
+}
+.streaming-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.streaming-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
