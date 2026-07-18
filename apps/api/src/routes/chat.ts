@@ -3,6 +3,7 @@ import { stream } from 'hono/streaming';
 import { getDb } from '../db/init.js';
 import { AgentOrchestrator } from '../agent/orchestrator.js';
 import { getModel, PROVIDER_MODELS } from '../agent/providers.js';
+import type { AgentConfig } from '../agent/types.js';
 import { streamText } from 'ai';
 
 export const chatRoutes = new Hono();
@@ -119,12 +120,16 @@ chatRoutes.post('/conversations/:id/messages', async (c) => {
     try {
       if (agent) {
         // Use agent orchestrator for agentic responses
-        const orchestrator = new AgentOrchestrator(
+        const config: AgentConfig = {
           agent,
-          resolvedApiKey,
-          resolvedProvider,
-          resolvedModel
-        );
+          apiKey: resolvedApiKey,
+          provider: resolvedProvider,
+          model: resolvedModel,
+          userId: user.id,
+          sessionId: conversationId,
+        };
+
+        const orchestrator = new AgentOrchestrator(config);
 
         // Add history to orchestrator
         for (const msg of history.slice(0, -1)) {

@@ -1,6 +1,6 @@
 import { getDb } from '../db/init.js';
 import { AgentOrchestrator } from './orchestrator.js';
-import type { Agent, SubAgentTask } from './types.js';
+import type { Agent, AgentConfig, SubAgentTask } from './types.js';
 
 export class SubAgentManager {
   private activeTasks: Map<string, SubAgentTask> = new Map();
@@ -9,12 +9,12 @@ export class SubAgentManager {
     parentAgentId: string,
     childAgentId: string,
     task: string,
+    userId: string,
     apiKey: string,
     provider: string
   ): Promise<string> {
     const db = getDb();
 
-    // Get child agent details
     const childAgent = db.prepare(`
       SELECT * FROM agents WHERE id = ?
     `).get(childAgentId) as Agent | undefined;
@@ -23,7 +23,6 @@ export class SubAgentManager {
       throw new Error(`Sub-agent not found: ${childAgentId}`);
     }
 
-    // Create task record
     const taskId = crypto.randomUUID();
     const subTask: SubAgentTask = {
       id: taskId,
@@ -37,15 +36,16 @@ export class SubAgentManager {
     this.activeTasks.set(taskId, subTask);
 
     try {
-      // Create orchestrator for child agent
-      const orchestrator = new AgentOrchestrator(
-        childAgent,
+      const config: AgentConfig = {
+        agent: childAgent,
         apiKey,
         provider,
-        childAgent.model || 'claude-sonnet-4-20250514'
-      );
+        model: childAgent.model || 'claude-sonnet-4-20250514',
+        userId,
+        sessionId: taskId,
+      };
 
-      // Run the task
+      const orchestrator = new AgentOrchestrator(config);
       const result = await orchestrator.run(task);
 
       subTask.status = 'completed';
@@ -65,6 +65,7 @@ export class SubAgentManager {
     parentAgentId: string,
     childAgentId: string,
     task: string,
+    userId: string,
     apiKey: string,
     provider: string
   ): Promise<AsyncGenerator<string>> {
@@ -78,13 +79,16 @@ export class SubAgentManager {
       throw new Error(`Sub-agent not found: ${childAgentId}`);
     }
 
-    const orchestrator = new AgentOrchestrator(
-      childAgent,
+    const config: AgentConfig = {
+      agent: childAgent,
       apiKey,
       provider,
-      childAgent.model || 'claude-sonnet-4-20250514'
-    );
+      model: childAgent.model || 'claude-sonnet-4-20250514',
+      userId,
+      sessionId: crypto.randomUUID(),
+    };
 
+    const orchestrator = new AgentOrchestrator(config);
     return orchestrator.runStream(task);
   }
 
