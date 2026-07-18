@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Plus, Settings, Menu, X, Send, Bot, User, Sparkles } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../../lib/utils';
 
 interface Message {
   id: string;

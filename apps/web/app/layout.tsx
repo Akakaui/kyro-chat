@@ -1,21 +1,29 @@
-import type { Metadata } from 'next';
-import '../styles/globals.css';
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "../styles/globals.css"
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+})
 
 export const metadata: Metadata = {
-  title: 'ChatBot SaaS',
-  description: 'AI-powered chatbot platform with agentic capabilities',
-};
+  title: "Kyro Chat",
+  description: "AI-powered chat with agentic capabilities",
+}
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className="bg-[#0d0f11] text-[#e4e5e7] antialiased">
+    <html lang="en" className="dark">
+      <body
+        className={`${inter.variable} font-sans bg-bg-primary text-text-primary antialiased`}
+      >
         {children}
       </body>
     </html>
-  );
+  )
 }
