@@ -17,6 +17,40 @@ export function resolvePermission(permissionId: string, allowed: boolean): boole
   return false;
 }
 
+// Global pending question map: questionId → resolver callback
+const pendingQuestions = new Map<string, { resolve: (answer: string | string[]) => void }>();
+
+export function resolveQuestion(questionId: string, answer: string | string[]): boolean {
+  const entry = pendingQuestions.get(questionId);
+  if (entry) {
+    entry.resolve(answer);
+    pendingQuestions.delete(questionId);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Ask a question to the user via the HITL question system.
+ * Pushes a __QUESTION_REQUIRED__ marker into the queued events array,
+ * then blocks until the user responds.
+ */
+export function askQuestion(
+  queuedEvents: string[],
+  question: string,
+  type: 'single_choice' | 'multiple_choice' | 'free_text' | 'confirm',
+  options?: Array<{ label: string; value: string }>,
+  required: boolean = true,
+): Promise<string | string[]> {
+  const questionId = crypto.randomUUID();
+  const payload = JSON.stringify({ id: questionId, question, type, options, required });
+
+  return new Promise<string | string[]>((resolve) => {
+    pendingQuestions.set(questionId, { resolve });
+    queuedEvents.push(`\n__QUESTION_REQUIRED__:${payload}\n`);
+  });
+}
+
 export class AgentOrchestrator {
   private state: AgentState;
   private config: AgentConfig;
@@ -180,6 +214,9 @@ export class AgentOrchestrator {
       sandboxId: this.sandboxId,
       apiKey: this.config.apiKey,
       provider: this.config.provider,
+      // HITL: inject askQuestion so tools can pause and ask the user
+      askQuestion: (question, type, options, required) =>
+        askQuestion(queuedQuestionEvents, question, type, options, required),
     };
 
     // Hook: onStart
@@ -194,6 +231,8 @@ export class AgentOrchestrator {
 
     // Permission events to emit during streaming (set by onStepFinish, yielded by generator)
     const queuedPermissionEvents: string[] = [];
+    // Question events to emit during streaming (set by askQuestion in context, yielded by generator)
+    const queuedQuestionEvents: string[] = [];
 
     try {
       const model = getModel(
@@ -295,9 +334,13 @@ export class AgentOrchestrator {
         fullText += chunk;
         yield chunk;
 
-        // Yield any queued permission events
+        // Yield any queued permission and question events
         while (queuedPermissionEvents.length > 0) {
           const event = queuedPermissionEvents.shift()!;
+          yield event;
+        }
+        while (queuedQuestionEvents.length > 0) {
+          const event = queuedQuestionEvents.shift()!;
           yield event;
         }
       }

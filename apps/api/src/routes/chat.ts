@@ -6,7 +6,7 @@ import { getModel, PROVIDER_MODELS } from '../agent/providers.js';
 import type { AgentConfig } from '../agent/types.js';
 import { streamText } from 'ai';
 import { sandboxService } from '../sandbox/service.js';
-import { chatRateLimit } from '../middleware/limits.js';
+import { chatLimit } from '../middleware/rateLimit.js';
 
 export const chatRoutes = new Hono();
 
@@ -83,7 +83,7 @@ chatRoutes.get('/conversations/:id', async (c) => {
 });
 
 // Send message and get streaming response with agent orchestration
-chatRoutes.post('/conversations/:id/messages', chatRateLimit(), async (c) => {
+chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
   const user = c.get('user');
   const conversationId = c.req.param('id');
   const { content, agentId, provider = 'anthropic', apiKey, model, incognito, chatMode } = await c.req.json();
@@ -299,7 +299,7 @@ chatRoutes.post('/conversations/:id/messages', chatRateLimit(), async (c) => {
       if (!incognito) {
         const assistantMsgId = crypto.randomUUID();
         let savedResponse = fullResponse;
-        const markers = ['__TOOLS_USED__:', '__ARTIFACTS__:', '__SANDBOX_ID__:'];
+        const markers = ['__TOOLS_USED__:', '__ARTIFACTS__:', '__SANDBOX_ID__:', '__PERMISSION_REQUIRED__:', '__QUESTION_REQUIRED__:'];
         for (const marker of markers) {
           const idx = savedResponse.indexOf(marker);
           if (idx !== -1) {
@@ -392,6 +392,24 @@ chatRoutes.post('/permission-response', async (c) => {
   // Resolve pending permission in orchestrator
   const { resolvePermission } = await import('../agent/orchestrator.js');
   resolvePermission(permissionId, decision === 'allow');
+
+  return c.json({ success: true });
+});
+
+// Question response from user (HITL)
+chatRoutes.post('/question-response', async (c) => {
+  const { questionId, answer } = await c.req.json();
+
+  if (!questionId || answer === undefined) {
+    return c.json({ error: 'Invalid request' }, 400);
+  }
+
+  const { resolveQuestion } = await import('../agent/orchestrator.js');
+  const resolved = resolveQuestion(questionId, answer);
+
+  if (!resolved) {
+    return c.json({ error: 'Question not found or already answered' }, 404);
+  }
 
   return c.json({ success: true });
 });

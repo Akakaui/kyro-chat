@@ -8,6 +8,7 @@ import { sendMessageStream, type ToolUse } from "@/lib/api"
 import { ChatMessage } from "./ChatMessage"
 import { ChatInput, type AttachedFile } from "./ChatInput"
 import { PermissionPrompt, type PermissionRequest } from "./PermissionPrompt"
+import { QuestionForm } from "./QuestionForm"
 import { TaskBadge, type TaskInfo } from "./TaskBadge"
 import { BrowserOverlay } from "../browser/BrowserOverlay"
 
@@ -26,6 +27,9 @@ export function ChatView() {
     pendingPermissions,
     addPendingPermission,
     removePendingPermission,
+    pendingQuestions,
+    addPendingQuestion,
+    removePendingQuestion,
     tasks,
     addTask,
     updateTask,
@@ -224,6 +228,23 @@ export function ChatView() {
               } catch {}
               accumulated = accumulated.slice(0, permIdx)
             }
+
+            // Parse question required marker
+            const qMarker = "__QUESTION_REQUIRED__:"
+            const qIdx = accumulated.indexOf(qMarker)
+            if (qIdx !== -1) {
+              try {
+                const qData = JSON.parse(accumulated.slice(qIdx + qMarker.length))
+                addPendingQuestion({
+                  id: qData.id,
+                  question: qData.question,
+                  type: qData.type,
+                  options: qData.options,
+                  required: qData.required !== false,
+                })
+              } catch {}
+              accumulated = accumulated.slice(0, qIdx)
+            }
           },
           () => setStreaming(false),
           (errorMsg) => {
@@ -342,6 +363,23 @@ export function ChatView() {
               } catch {}
               accumulated = accumulated.slice(0, permIdx)
             }
+
+            // Parse question required marker
+            const qMarker = "__QUESTION_REQUIRED__:"
+            const qIdx = accumulated.indexOf(qMarker)
+            if (qIdx !== -1) {
+              try {
+                const qData = JSON.parse(accumulated.slice(qIdx + qMarker.length))
+                addPendingQuestion({
+                  id: qData.id,
+                  question: qData.question,
+                  type: qData.type,
+                  options: qData.options,
+                  required: qData.required !== false,
+                })
+              } catch {}
+              accumulated = accumulated.slice(0, qIdx)
+            }
           },
           () => setStreaming(false),
           (errorMsg) => {
@@ -412,6 +450,29 @@ export function ChatView() {
     [removePendingPermission]
   )
 
+  const handleQuestionAnswer = useCallback(
+    async (questionId: string, answer: string | string[]) => {
+      removePendingQuestion(questionId)
+      try {
+        const token = localStorage.getItem("token")
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/chat/question-response`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ questionId, answer }),
+          }
+        )
+      } catch {
+        // Question response failed silently
+      }
+    },
+    [removePendingQuestion]
+  )
+
   const hasMessages = messages.length > 0
 
   // Derive task info for TaskBadge
@@ -458,6 +519,25 @@ export function ChatView() {
                 request={perm}
                 onDecision={handlePermissionDecision}
                 compact={pendingPermissions.length > 1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* HITL Question prompts — inline above input */}
+      {pendingQuestions.length > 0 && (
+        <div className="border-t border-border bg-bg-primary px-3 py-2 md:px-4">
+          <div className="mx-auto max-w-3xl space-y-2">
+            {pendingQuestions.map((q) => (
+              <QuestionForm
+                key={q.id}
+                questionId={q.id}
+                question={q.question}
+                type={q.type}
+                options={q.options}
+                required={q.required}
+                onAnswer={handleQuestionAnswer}
               />
             ))}
           </div>

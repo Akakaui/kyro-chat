@@ -1,21 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
+import type { Context, Next } from 'hono';
 
 // We test the route handlers by creating a minimal Hono app with the chat routes.
 // We mock the database and external services.
 
-// Create mock database
-vi.mock('../db/init.js', () => {
-  const mockDb = {
-    prepare: vi.fn().mockReturnThis(),
-    get: vi.fn(),
-    all: vi.fn().mockReturnValue([]),
-    run: vi.fn(),
-    exec: vi.fn(),
-    pragma: vi.fn(),
-  };
-  return { getDb: vi.fn(() => mockDb) };
-});
+// Create mock database with per-query prepare chaining
+const mockStatement = {
+  get: vi.fn(),
+  all: vi.fn().mockReturnValue([]),
+  run: vi.fn(),
+};
+const mockDb = {
+  prepare: vi.fn().mockReturnValue(mockStatement),
+  exec: vi.fn(),
+  pragma: vi.fn(),
+};
+
+vi.mock('../db/init.js', () => ({
+  getDb: vi.fn(() => mockDb),
+}));
 
 vi.mock('../agent/orchestrator.js', () => ({
   AgentOrchestrator: vi.fn(),
@@ -35,8 +39,12 @@ vi.mock('../sandbox/service.js', () => ({
   },
 }));
 
-vi.mock('../middleware/limits.js', () => ({
-  chatRateLimit: vi.fn(() => async (c: any, next: any) => next()),
+vi.mock('../middleware/rateLimit.js', () => ({
+  chatLimit: vi.fn(() => async (c: any, next: any) => next()),
+  authLimit: vi.fn(() => async (c: any, next: any) => next()),
+  apiLimit: vi.fn(() => async (c: any, next: any) => next()),
+  modelLimit: vi.fn(() => async (c: any, next: any) => next()),
+  rateLimit: vi.fn(() => async (c: any, next: any) => next()),
 }));
 
 vi.mock('../kb/vector.js', () => ({
@@ -50,12 +58,11 @@ vi.mock('../artifacts/service.js', () => ({
 }));
 
 import { chatRoutes } from '../routes/chat.js';
-import { getDb } from '../db/init.js';
 
 function createTestApp(user: any = { id: 'u1' }) {
   const app = new Hono();
   // Set user in context
-  app.use('*', async (c, next) => {
+  app.use('*', async (c: Context, next: Next) => {
     c.set('user', user);
     await next();
   });
@@ -83,8 +90,7 @@ describe('chat routes', () => {
     });
 
     it('should return 404 for invalid projectId', async () => {
-      const mockDb = getDb();
-      (mockDb.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+      mockStatement.get.mockReturnValue(undefined);
       const app = createTestApp();
       const res = await app.request('/chat/conversations', {
         method: 'POST',
@@ -107,8 +113,7 @@ describe('chat routes', () => {
 
   describe('GET /conversations/:id', () => {
     it('should return 404 for non-existent conversation', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+      mockStatement.get.mockReturnValue(undefined);
       const app = createTestApp();
       const res = await app.request('/chat/conversations/nonexistent');
       expect(res.status).toBe(404);
@@ -117,8 +122,7 @@ describe('chat routes', () => {
 
   describe('PATCH /conversations/:id', () => {
     it('should update title', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue({ id: 'c1', user_id: 'u1' });
+      mockStatement.get.mockReturnValue({ id: 'c1', user_id: 'u1' });
       const app = createTestApp();
       const res = await app.request('/chat/conversations/c1', {
         method: 'PATCH',
@@ -131,8 +135,7 @@ describe('chat routes', () => {
     });
 
     it('should update starred', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue({ id: 'c1', user_id: 'u1' });
+      mockStatement.get.mockReturnValue({ id: 'c1', user_id: 'u1' });
       const app = createTestApp();
       const res = await app.request('/chat/conversations/c1', {
         method: 'PATCH',
@@ -143,8 +146,7 @@ describe('chat routes', () => {
     });
 
     it('should update archived', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue({ id: 'c1', user_id: 'u1' });
+      mockStatement.get.mockReturnValue({ id: 'c1', user_id: 'u1' });
       const app = createTestApp();
       const res = await app.request('/chat/conversations/c1', {
         method: 'PATCH',
@@ -155,8 +157,7 @@ describe('chat routes', () => {
     });
 
     it('should return 404 if conversation not found', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+      mockStatement.get.mockReturnValue(undefined);
       const app = createTestApp();
       const res = await app.request('/chat/conversations/c1', {
         method: 'PATCH',
@@ -167,8 +168,7 @@ describe('chat routes', () => {
     });
 
     it('should return 400 if no fields to update', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue({ id: 'c1', user_id: 'u1' });
+      mockStatement.get.mockReturnValue({ id: 'c1', user_id: 'u1' });
       const app = createTestApp();
       const res = await app.request('/chat/conversations/c1', {
         method: 'PATCH',
@@ -181,8 +181,7 @@ describe('chat routes', () => {
 
   describe('POST /conversations/:id/messages', () => {
     it('should reject messages exceeding 100000 chars', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue({ id: 'c1', user_id: 'u1' });
+      mockStatement.get.mockReturnValue({ id: 'c1', user_id: 'u1' });
       const app = createTestApp();
       const res = await app.request('/chat/conversations/c1/messages', {
         method: 'POST',
@@ -193,8 +192,7 @@ describe('chat routes', () => {
     });
 
     it('should return 404 for non-existent conversation', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+      mockStatement.get.mockReturnValue(undefined);
       const app = createTestApp();
       const res = await app.request('/chat/conversations/c1/messages', {
         method: 'POST',
@@ -205,8 +203,7 @@ describe('chat routes', () => {
     });
 
     it('should return 400 when no API key is configured', async () => {
-      const mockDb = getDb();
-      (mockDb.get as ReturnType<typeof vi.fn>).mockReturnValue({ id: 'c1', user_id: 'u1' });
+      mockStatement.get.mockReturnValue({ id: 'c1', user_id: 'u1' });
       // Ensure env has no API keys
       delete process.env.ANTHROPIC_API_KEY;
       delete process.env.OPENAI_API_KEY;

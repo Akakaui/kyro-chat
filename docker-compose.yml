@@ -5,16 +5,24 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+      target: runner
     ports:
       - "3001:3001"
     environment:
       - PORT=3001
-      - FRONTEND_URL=http://localhost:3000
+      - NODE_ENV=production
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - API_KEY_ENCRYPTION_KEY=${API_KEY_ENCRYPTION_KEY}
       - E2B_API_KEY=${E2B_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}
@@ -24,7 +32,13 @@ services:
       - IMAP_USER=${IMAP_USER}
       - IMAP_PASS=${IMAP_PASS}
     volumes:
-      - ./data:/app/data
+      - api-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   # Browser service (noVNC) - KasmWeb Chrome
@@ -36,3 +50,6 @@ services:
       - VNC_PASSWORD=${VNC_PASSWORD}
       - KASM_DISABLE_AUTH=${KASM_DISABLE_AUTH:-0}
     restart: unless-stopped
+
+volumes:
+  api-data:

@@ -5,6 +5,13 @@ import type { ToolDefinition, ToolContext, ToolResult } from '../agent/types.js'
 // Sandbox-aware tool context extends base context
 export interface SandboxToolContext extends ToolContext {
   sandboxId?: string;
+  /** Ask the user a question mid-execution (HITL). Returns the user's answer. */
+  askQuestion?: (
+    question: string,
+    type: 'single_choice' | 'multiple_choice' | 'free_text' | 'confirm',
+    options?: Array<{ label: string; value: string }>,
+    required?: boolean,
+  ) => Promise<string | string[]>;
 }
 
 function requireSandbox(ctx: ToolContext): string {

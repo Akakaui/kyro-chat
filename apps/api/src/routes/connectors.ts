@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/init.js';
 import { encryptApiKey, decryptApiKey } from '../lib/encryption.js';
+import { apiLimit } from '../middleware/rateLimit.js';
 
 export const connectorRoutes = new Hono();
+
+// Apply general API rate limit to all connector routes
+connectorRoutes.use('*', apiLimit);
 
 // ---------- Helper: discover API endpoints ----------
 

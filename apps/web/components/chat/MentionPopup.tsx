@@ -114,10 +114,18 @@ export function MentionPopup({
   return (
     <div className="absolute bottom-full left-0 mb-2 w-72 rounded-xl border border-border bg-bg-secondary shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
       <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
-        {items.length === 0 ? (
+        {items.length === 0 && kbs.length > 0 ? (
           <div className="px-3 py-4 text-center text-xs text-text-muted">
             No matching results
           </div>
+        ) : items.length === 0 && kbs.length === 0 ? (
+          <>
+            {agents.length > 0 && (
+              <div className="text-[10px] uppercase font-medium text-text-muted px-3 py-1.5">
+                Agents
+              </div>
+            )}
+          </>
         ) : (
           sections.map(({ item, showHeader }, i) => {
             const isSelected = i === selectedIndex
@@ -187,16 +195,40 @@ export function MentionPopup({
           })
         )}
 
-        {/* Artifacts section */}
-        {artifacts.length > 0 && (
+        {/* KB empty state — shown when no knowledge bases exist yet */}
+        {kbs.length === 0 && (
           <div className="border-t border-border mt-1 pt-1">
-            <div className="flex items-center gap-2 text-[10px] uppercase font-medium text-text-muted px-3 py-1.5">
-              Artifacts
+            <div className="text-[10px] uppercase font-medium text-text-muted px-3 py-1.5">
+              Knowledge Bases
+            </div>
+            <div className="px-3 py-2.5 flex items-center gap-2.5">
+              <BookOpen size={16} className="shrink-0 text-text-muted" />
+              <div className="text-xs text-text-muted">
+                No knowledge bases yet. Upload files in settings.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Artifacts section */}
+        <div className="border-t border-border mt-1 pt-1">
+          <div className="flex items-center gap-2 text-[10px] uppercase font-medium text-text-muted px-3 py-1.5">
+            Artifacts
+            {artifacts.length > 0 && (
               <span className="bg-bg-tertiary text-text-muted px-1.5 py-0.5 rounded-full text-[9px]">
                 {artifacts.length}
               </span>
+            )}
+          </div>
+          {artifacts.length === 0 ? (
+            <div className="px-3 py-2.5 flex items-center gap-2.5">
+              <FileText size={16} className="shrink-0 text-text-muted" />
+              <div className="text-xs text-text-muted">
+                No artifacts in this conversation
+              </div>
             </div>
-            {artifacts.map((artifact) => (
+          ) : (
+            artifacts.map((artifact) => (
               <div
                 key={artifact.id}
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
@@ -209,9 +241,9 @@ export function MentionPopup({
                   <div className="text-xs text-text-muted">{artifact.type}</div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
 
         {/* MCP Servers section */}
         {mcpServers.length > 0 && (

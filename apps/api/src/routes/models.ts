@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/init.js';
 import crypto from 'crypto';
+import { modelLimit } from '../middleware/rateLimit.js';
 
 export const modelRoutes = new Hono();
+
+// Apply model-tier rate limit to all model/usage routes
+modelRoutes.use('*', modelLimit);
 
 // Model definitions with usage limits per 4-hour window
 const MODEL_REGISTRY = [

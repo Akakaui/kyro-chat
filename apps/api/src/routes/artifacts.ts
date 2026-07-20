@@ -2,8 +2,12 @@ import { Hono } from 'hono';
 import { artifactService } from '../artifacts/service.js';
 import { sandboxService } from '../sandbox/service.js';
 import { getDb } from '../db/init.js';
+import { apiLimit } from '../middleware/rateLimit.js';
 
 export const artifactRoutes = new Hono();
+
+// Apply general API rate limit to all artifact routes
+artifactRoutes.use('*', apiLimit);
 
 // Create artifact
 artifactRoutes.post('/', async (c) => {

@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { authMiddleware } from './middleware/auth.js';
 import { securityHeaders } from './middleware/security-headers.js';
+import { authLimit } from './middleware/rateLimit.js';
 import { healthRoutes } from './routes/health.js';
 import { chatRoutes } from './routes/chat.js';
 import { userRoutes } from './routes/user.js';
@@ -29,14 +30,35 @@ import { schedulerService } from './scheduler/service.js';
 const app = new Hono();
 
 app.use('*', logger());
+
+// CORS — production allows only the configured frontend domain; dev allows localhost
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+const allowedOrigins = frontendUrl.split(',').map((o) => o.trim());
+
 app.use('*', cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin) => {
+    // Allow requests with no origin (curl, server-to-server)
+    if (!origin) return origin;
+    if (allowedOrigins.includes(origin)) return origin;
+    return allowedOrigins[0]; // fallback to first allowed origin
+  },
   credentials: true,
+  allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
 }));
 app.use('*', securityHeaders);
 
 // Public routes
 app.route('/health', healthRoutes);
+
+// Public auth routes (login, signup, password reset) — IP-based rate limit
+const authApp = new Hono();
+authApp.use('*', authLimit);
+// Mount auth routes here when added, e.g.:
+// import { authRoutes } from './routes/auth.js';
+// authApp.route('/', authRoutes);
+app.route('/auth', authApp);
 
 // Protected routes (require Supabase JWT)
 const protectedApp = new Hono();
@@ -69,6 +91,11 @@ app.get('/share/:hash', async (c) => {
   // Forward to artifacts route
   const hash = c.req.param('hash');
   return c.redirect(`/api/artifacts/share/${hash}`);
+});
+
+// 404 for unmatched routes
+app.notFound((c) => {
+  return c.json({ error: 'Not found' }, 404);
 });
 
 // Error handler

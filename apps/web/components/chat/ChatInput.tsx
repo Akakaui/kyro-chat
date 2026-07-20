@@ -24,6 +24,7 @@ import {
   type MentionItem,
   type MentionAgent,
   type MentionKB,
+  type MentionArtifact,
 } from "./MentionPopup"
 
 export interface AttachedFile {
@@ -56,12 +57,11 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
     skills,
     agents,
     knowledgeBases,
-    mentionArtifacts,
+    messages,
     connectors,
     fetchSkills,
     fetchAgents,
     fetchKnowledgeBases,
-    fetchMentionArtifacts,
   } = useChatStore()
 
   const [value, setValue] = React.useState("")
@@ -71,8 +71,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
     fetchSkills()
     fetchAgents()
     fetchKnowledgeBases()
-    fetchMentionArtifacts()
-  }, [fetchSkills, fetchAgents, fetchKnowledgeBases, fetchMentionArtifacts])
+  }, [fetchSkills, fetchAgents, fetchKnowledgeBases])
 
   // Popup state
   const [showSlashMenu, setShowSlashMenu] = React.useState(false)
@@ -122,6 +121,19 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
         connected: c.status === "connected",
       }))
   }, [connectors])
+
+  // Derive artifacts from current conversation's messages instead of global
+  const conversationArtifacts = React.useMemo(() => {
+    const artifactMap = new Map<string, MentionArtifact>()
+    for (const msg of messages) {
+      if (msg.artifacts) {
+        for (const a of msg.artifacts) {
+          artifactMap.set(a.id, { id: a.id, name: a.title, type: a.type })
+        }
+      }
+    }
+    return Array.from(artifactMap.values())
+  }, [messages])
 
   React.useEffect(() => {
     const max = showSlashMenu ? slashFilteredCount : showMentionPopup ? 20 : 0
@@ -362,7 +374,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
               onHover={setSelectedIndex}
               agents={mentionAgents}
               kbs={mentionKBs}
-              artifacts={mentionArtifacts}
+              artifacts={conversationArtifacts}
               mcpServers={mentionMcpServers}
             />
           )}

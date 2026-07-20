@@ -14,7 +14,7 @@ interface QuestionOption {
 interface QuestionFormProps {
   questionId: string
   question: string
-  type: "single_choice" | "multiple_choice" | "free_text"
+  type: "single_choice" | "multiple_choice" | "free_text" | "confirm"
   options?: QuestionOption[]
   required?: boolean
   onAnswer: (questionId: string, answer: string | string[]) => void
@@ -63,6 +63,8 @@ export function QuestionForm({
         return !required || selectedMultiple.length > 0
       case "free_text":
         return !required || freeText.trim().length > 0
+      case "confirm":
+        return true
     }
   }
 
@@ -181,8 +183,32 @@ export function QuestionForm({
         </div>
       )}
 
+      {/* Confirm (yes/no) */}
+      {type === "confirm" && (
+        <div className="flex gap-2 px-3 pb-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onAnswer(questionId, "yes")}
+            disabled={disabled}
+            className="flex-1"
+          >
+            Yes
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onAnswer(questionId, "no")}
+            disabled={disabled}
+            className="flex-1"
+          >
+            No
+          </Button>
+        </div>
+      )}
+
       {/* Submit button */}
-      {type !== "free_text" && (
+      {type !== "free_text" && type !== "confirm" && (
         <div className="border-t border-border/60 px-3 py-2">
           <Button
             size="sm"

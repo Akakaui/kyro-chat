@@ -2,8 +2,12 @@ import { Hono } from 'hono';
 import { getDb } from '../db/init.js';
 import { storeChunk, searchChunks, deleteChunks } from '../kb/vector.js';
 import { parseBuffer, chunkDocument } from '../kb/parser.js';
+import { apiLimit } from '../middleware/rateLimit.js';
 
 export const kbRoutes = new Hono();
+
+// Apply general API rate limit to all KB routes
+kbRoutes.use('*', apiLimit);
 
 // Upload file to knowledge base
 kbRoutes.post('/upload', async (c) => {

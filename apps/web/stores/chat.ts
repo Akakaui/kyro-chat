@@ -184,6 +184,18 @@ interface ChatState {
   removePendingPermission: (id: string) => void
   clearPendingPermissions: () => void
 
+  // HITL Question prompts (inline)
+  pendingQuestions: Array<{
+    id: string
+    question: string
+    type: "single_choice" | "multiple_choice" | "free_text" | "confirm"
+    options?: Array<{ label: string; value: string }>
+    required?: boolean
+  }>
+  addPendingQuestion: (q: { id: string; question: string; type: "single_choice" | "multiple_choice" | "free_text" | "confirm"; options?: Array<{ label: string; value: string }>; required?: boolean }) => void
+  removePendingQuestion: (id: string) => void
+  clearPendingQuestions: () => void
+
   // Task tracking
   tasks: Array<{ id: string; name: string; status: "running" | "done" | "error" }>
   addTask: (task: { id: string; name: string; status: "running" | "done" | "error" }) => void
@@ -548,6 +560,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })),
   clearPendingPermissions: () => set({ pendingPermissions: [] }),
 
+  // HITL Question prompts (inline)
+  pendingQuestions: [],
+  addPendingQuestion: (q) =>
+    set((state) => ({
+      pendingQuestions: [...state.pendingQuestions, q],
+    })),
+  removePendingQuestion: (id) =>
+    set((state) => ({
+      pendingQuestions: state.pendingQuestions.filter((p) => p.id !== id),
+    })),
+  clearPendingQuestions: () => set({ pendingQuestions: [] }),
+
   // Task tracking
   tasks: [],
   addTask: (task) =>
@@ -596,8 +620,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { listKbSources } = await import("@/lib/api")
       const data = await listKbSources()
       set({ knowledgeBases: data.sources || [] })
-    } catch {
-      // Silent fail - defaults already set
+    } catch (err) {
+      console.error("Failed to fetch knowledge bases:", err)
     }
   },
   fetchMentionArtifacts: async () => {
