@@ -33,7 +33,8 @@ export async function storeChunk(
 export async function searchChunks(
   kbId: string,
   query: string,
-  limit: number = 5
+  limit: number = 5,
+  userId?: string
 ): Promise<Array<{
   id: string;
   content: string;
@@ -45,17 +46,29 @@ export async function searchChunks(
   // Generate query embedding
   const queryEmbedding = await generateEmbedding(query);
 
-  // Get all chunks for this knowledge base
-  const chunks = db.prepare(`
-    SELECT id, content, embedding, metadata
-    FROM kb_chunks
-    WHERE kb_id = ?
-  `).all(kbId) as Array<{
-    id: string;
-    content: string;
-    embedding: Buffer;
-    metadata: string;
-  }>;
+  // Get chunks, optionally scoped to user's knowledge base
+  const chunks = userId
+    ? db.prepare(`
+        SELECT kc.id, kc.content, kc.embedding, kc.metadata
+        FROM kb_chunks kc
+        JOIN knowledge_bases kb ON kc.kb_id = kb.id
+        WHERE kc.kb_id = ? AND kb.user_id = ?
+      `).all(kbId, userId) as Array<{
+        id: string;
+        content: string;
+        embedding: Buffer;
+        metadata: string;
+      }>
+    : db.prepare(`
+        SELECT id, content, embedding, metadata
+        FROM kb_chunks
+        WHERE kb_id = ?
+      `).all(kbId) as Array<{
+        id: string;
+        content: string;
+        embedding: Buffer;
+        metadata: string;
+      }>;
 
   // Calculate similarity scores
   const scoredChunks = chunks.map(chunk => {

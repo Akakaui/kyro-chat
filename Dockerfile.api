@@ -18,8 +18,13 @@ RUN npm install
 # Copy source
 COPY apps/api/ ./
 
-# Create data directory
-RUN mkdir -p /app/data
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+
+# Create data directory and set ownership
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 3001
 

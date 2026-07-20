@@ -1,289 +1,602 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Plus, Settings, Menu, X, Send, Bot, User, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  MessageSquare, Plus, Settings, Menu, X, Send, Bot, User, Sparkles,
+  Star, Archive, MoreHorizontal, Pencil, Trash2, Clock, ChevronDown,
+  Brain, Plug, Wrench, FolderOpen, CheckCircle2, Copy, Check, EyeOff,
+  Filter, FileCode
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ChatView } from '../../components/chat/ChatView';
+import { SettingsPanel } from '../../components/panels/SettingsPanel';
+import { ModelSelector } from '../../components/chat/ModelSelector';
+import { AddToChatOverlay } from '../../components/chat/AddToChatOverlay';
+import { AgentsPanel } from '../../components/agents/AgentsPanel';
+import { SkillsPanel } from '../../components/skills/SkillsPanel';
+import { KnowledgeBasePanel } from '../../components/kb/KnowledgeBasePanel';
+import { ProjectsPanel } from '../../components/projects/ProjectsPanel';
+import { MemoryPanel } from '../../components/memory/MemoryPanel';
+import { ConnectorsPanel } from '../../components/connectors/ConnectorsPanel';
+import { ArtifactPanel } from '../../components/artifacts/ArtifactPanel';
+import { useChatStore } from '../../stores/chat';
+import {
+  listConversations,
+  createConversation as apiCreateConversation,
+  deleteConversation as apiDeleteConversation,
+  updateConversation as apiUpdateConversation,
+} from '../../lib/api';
 
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-}
-
-interface Conversation {
+type Conversation = {
   id: string;
   title: string;
   model: string;
+  starred?: boolean;
+  archived?: boolean;
   updated_at: number;
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+};
 
 export default function ChatPage() {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: false,
+            retry: 1,
+          },
+        },
+      })
+  );
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('chats');
+  const [showArchived, setShowArchived] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [chatFilter, setChatFilter] = useState<'all' | 'starred'>('all');
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const {
+    activeConversation, setActiveConversation, settingsPanelOpen, setSettingsPanelOpen,
+    modelSelectorOpen, setModelSelectorOpen, incognito, toggleIncognito,
+    selectedProjectId, setSelectedProjectId
+  } = useChatStore();
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchConversations();
-  }, []);
+  useEffect(() => { fetchConversations(); }, []);
 
+  // Close context menu on outside click
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const handler = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    if (contextMenu) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [contextMenu]);
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch(`${API_URL}/chat/conversations`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      const data = await res.json();
-      setConversations(data.conversations || []);
+      const data = await listConversations();
+      const all = data.conversations || [];
+      setConversations(all.filter((c: Conversation) => !c.archived));
+      setArchivedConversations(all.filter((c: Conversation) => c.archived));
     } catch (err) {
       console.error('Failed to fetch conversations:', err);
     }
   };
 
-  const createConversation = async () => {
+  const handleCreateConversation = async () => {
     try {
-      const res = await fetch(`${API_URL}/chat/conversations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ title: 'New conversation' })
-      });
-      const data = await res.json();
-      setConversations(prev => [{ ...data, updated_at: Date.now() }, ...prev]);
-      setActiveConversation(data.id);
-      setMessages([]);
+      const conv = await apiCreateConversation('New conversation');
+      setConversations(prev => [{ ...conv, updated_at: Date.now() }, ...prev]);
+      setActiveConversation(conv.id);
+      setSidebarOpen(false);
     } catch (err) {
       console.error('Failed to create conversation:', err);
     }
   };
 
-  const sendMessage = async () => {
-    if (!inputValue.trim() || !activeConversation || isStreaming) return;
-
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: inputValue,
-      timestamp: Date.now(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputValue('');
-    setIsStreaming(true);
-
+  const handleDeleteConversation = async (id: string) => {
     try {
-      const res = await fetch(`${API_URL}/chat/conversations/${activeConversation}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ content: inputValue })
-      });
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantContent = '';
-
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: '',
-        timestamp: Date.now(),
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-
-      while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        assistantContent += chunk;
-
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantMessage.id
-              ? { ...m, content: assistantContent }
-              : m
-          )
-        );
-      }
+      await apiDeleteConversation(id);
+      setConversations(prev => prev.filter(c => c.id !== id));
+      setArchivedConversations(prev => prev.filter(c => c.id !== id));
+      if (activeConversation === id) setActiveConversation(null);
     } catch (err) {
-      console.error('Failed to send message:', err);
-    } finally {
-      setIsStreaming(false);
+      console.error('Failed to delete conversation:', err);
     }
   };
 
+  const handleArchiveConversation = async (id: string) => {
+    const conv = conversations.find(c => c.id === id);
+    if (!conv) return;
+    try {
+      await apiUpdateConversation(id, { archived: true });
+      setConversations(prev => prev.filter(c => c.id !== id));
+      setArchivedConversations(prev => [{ ...conv, archived: true }, ...prev]);
+      if (activeConversation === id) setActiveConversation(null);
+    } catch (err) {
+      console.error('Failed to archive conversation:', err);
+    }
+  };
+
+  const handleUnarchiveConversation = async (id: string) => {
+    const conv = archivedConversations.find(c => c.id === id);
+    if (!conv) return;
+    try {
+      await apiUpdateConversation(id, { archived: false });
+      setArchivedConversations(prev => prev.filter(c => c.id !== id));
+      setConversations(prev => [{ ...conv, archived: false }, ...prev]);
+    } catch (err) {
+      console.error('Failed to unarchive conversation:', err);
+    }
+  };
+
+  const handleRenameConversation = async (id: string) => {
+    if (!editTitle.trim()) return;
+    try {
+      await apiUpdateConversation(id, { title: editTitle.trim() });
+      setConversations(prev => prev.map(c => c.id === id ? { ...c, title: editTitle.trim() } : c));
+      setArchivedConversations(prev => prev.map(c => c.id === id ? { ...c, title: editTitle.trim() } : c));
+      setEditingId(null);
+      setEditTitle('');
+    } catch (err) {
+      console.error('Failed to rename conversation:', err);
+    }
+  };
+
+  const handleToggleStar = async (id: string) => {
+    const conv = conversations.find(c => c.id === id);
+    if (!conv) return;
+    const newStarred = !conv.starred;
+    try {
+      await apiUpdateConversation(id, { starred: newStarred });
+      setConversations(prev => prev.map(c => c.id === id ? { ...c, starred: newStarred } : c));
+    } catch (err) {
+      console.error('Failed to toggle star:', err);
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    setContextMenu({ id, x: e.clientX, y: e.clientY });
+  };
+
+  const starredConversations = conversations.filter(c => c.starred);
+  const recentConversations = conversations.filter(c => !c.starred);
+  const displayedConversations = chatFilter === 'starred' ? starredConversations : recentConversations;
+
+  const navItems = [
+    { icon: MessageSquare, label: 'Chats', tab: 'chats' },
+    { icon: FolderOpen, label: 'Projects', tab: 'projects' },
+    { icon: Wrench, label: 'Agents', tab: 'agents' },
+    { icon: Clock, label: 'Tasks', tab: 'tasks' },
+    { icon: FileCode, label: 'Artifacts', tab: 'artifacts' },
+    { icon: Brain, label: 'Memory', tab: 'memory' },
+    { icon: Plug, label: 'Connectors', tab: 'connectors' },
+    { icon: Settings, label: 'Settings', tab: 'settings', onClick: () => setSettingsPanelOpen(true) },
+  ];
+
   return (
-    <div className="flex h-screen">
-      {/* Sidebar Drawer */}
-      <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-72 bg-[#141618] border-r border-[#2c2e33] transform transition-transform duration-200 ease-in-out",
-        drawerOpen ? "translate-x-0" : "-translate-x-full"
+    <QueryClientProvider client={queryClient}>
+    <div className="flex h-screen bg-bg-primary">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-bg-secondary border-r border-border transition-transform duration-200",
+        "md:relative md:translate-x-0",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="flex items-center justify-between p-4 border-b border-[#2c2e33]">
-          <h2 className="text-lg font-semibold">Conversations</h2>
-          <button onClick={() => setDrawerOpen(false)} className="p-1 hover:bg-[#25262b] rounded">
+        {/* Brand header */}
+        <div className="flex h-14 items-center justify-between border-b border-border px-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-cyan">
+              <span className="text-sm font-bold text-white">K</span>
+            </div>
+            <span className="text-sm font-semibold text-text-primary">Kyro Chat</span>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden p-1 rounded-lg text-text-muted hover:bg-bg-hover">
             <X size={18} />
           </button>
         </div>
-        <div className="p-2">
+
+        {/* New Chat button */}
+        <div className="p-3">
           <button
-            onClick={createConversation}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm bg-[#e8590c] hover:bg-[#d4520e] text-white rounded-lg transition-colors"
+            onClick={handleCreateConversation}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
           >
             <Plus size={16} />
-            New Conversation
+            New chat
           </button>
         </div>
-        <div className="overflow-y-auto p-2 space-y-1">
-          {conversations.map(conv => (
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-2">
+          {navItems.map((item) => (
             <button
-              key={conv.id}
+              key={item.label}
               onClick={() => {
-                setActiveConversation(conv.id);
-                setDrawerOpen(false);
+                if (item.onClick) item.onClick();
+                else setActiveTab(item.tab);
               }}
               className={cn(
-                "w-full text-left px-3 py-2 text-sm rounded-lg transition-colors",
-                activeConversation === conv.id
-                  ? "bg-[#25262b] text-white"
-                  : "text-[#909296] hover:bg-[#1c1e20]"
+                "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors mb-0.5",
+                activeTab === item.tab
+                  ? "bg-bg-active text-accent"
+                  : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
               )}
             >
-              <div className="truncate">{conv.title}</div>
-              <div className="text-xs text-[#909296] mt-1">{conv.model}</div>
+              <item.icon size={16} />
+              {item.label}
             </button>
           ))}
-        </div>
-      </div>
 
-      {/* Overlay */}
-      {drawerOpen && (
+          {/* Conversations list */}
+          {activeTab === 'chats' && <div className="mt-4">
+            {/* Filter dropdown */}
+            <div className="relative mb-2 px-1">
+              <button
+                onClick={() => setFilterMenuOpen(!filterMenuOpen)}
+                className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted hover:text-text-secondary"
+              >
+                <Filter size={10} />
+                {chatFilter === 'starred' ? 'Starred' : 'All chats'}
+                <ChevronDown size={10} className={cn("transition-transform", filterMenuOpen && "rotate-180")} />
+              </button>
+              {filterMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setFilterMenuOpen(false)} />
+                  <div className="absolute left-1 top-full z-20 mt-0.5 w-36 rounded-lg border border-border bg-bg-primary py-1 shadow-xl">
+                    <button
+                      onClick={() => { setChatFilter('all'); setFilterMenuOpen(false); }}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors",
+                        chatFilter === 'all' ? "text-accent" : "text-text-secondary hover:bg-bg-tertiary"
+                      )}
+                    >
+                      All chats
+                    </button>
+                    <button
+                      onClick={() => { setChatFilter('starred'); setFilterMenuOpen(false); }}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors",
+                        chatFilter === 'starred' ? "text-accent" : "text-text-secondary hover:bg-bg-tertiary"
+                      )}
+                    >
+                      <Star size={10} className="fill-current" />
+                      Starred
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Starred section (only when showing all) */}
+            {chatFilter === 'all' && starredConversations.length > 0 && (
+              <div className="mb-3">
+                <h3 className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Starred
+                </h3>
+                {starredConversations.map(conv => (
+                  <ConversationItem
+                    key={conv.id}
+                    conv={conv}
+                    isActive={activeConversation === conv.id}
+                    editingId={editingId}
+                    editTitle={editTitle}
+                    setEditTitle={setEditTitle}
+                    onSelect={() => { setActiveConversation(conv.id); setSidebarOpen(false); }}
+                    onContextMenu={(e) => handleContextMenu(e, conv.id)}
+                    onRename={() => handleRenameConversation(conv.id)}
+                    onStartEdit={(id, title) => { setEditingId(id); setEditTitle(title); }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Recent / Filtered list */}
+            <div>
+              {chatFilter === 'all' && (
+                <h3 className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Recent
+                </h3>
+              )}
+              {displayedConversations.map(conv => (
+                <ConversationItem
+                  key={conv.id}
+                  conv={conv}
+                  isActive={activeConversation === conv.id}
+                  editingId={editingId}
+                  editTitle={editTitle}
+                  setEditTitle={setEditTitle}
+                  onSelect={() => { setActiveConversation(conv.id); setSidebarOpen(false); }}
+                  onContextMenu={(e) => handleContextMenu(e, conv.id)}
+                  onRename={() => handleRenameConversation(conv.id)}
+                  onStartEdit={(id, title) => { setEditingId(id); setEditTitle(title); }}
+                />
+              ))}
+              {displayedConversations.length === 0 && (
+                <p className="px-3 py-4 text-xs text-text-muted text-center">
+                  {chatFilter === 'starred' ? 'No starred conversations' : 'No conversations yet'}
+                </p>
+              )}
+            </div>
+
+            {/* Archived */}
+            {chatFilter === 'all' && archivedConversations.length > 0 && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setShowArchived(!showArchived)}
+                  className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted hover:text-text-secondary"
+                >
+                  <Archive size={12} />
+                  Archived ({archivedConversations.length})
+                  <ChevronDown size={12} className={cn("transition-transform", showArchived && "rotate-180")} />
+                </button>
+                {showArchived && archivedConversations.map(conv => (
+                  <ConversationItem
+                    key={conv.id}
+                    conv={conv}
+                    isActive={false}
+                    editingId={editingId}
+                    editTitle={editTitle}
+                    setEditTitle={setEditTitle}
+                    onSelect={() => { setActiveConversation(conv.id); setSidebarOpen(false); }}
+                    onContextMenu={(e) => handleContextMenu(e, conv.id)}
+                    onRename={() => handleRenameConversation(conv.id)}
+                    onStartEdit={(id, title) => { setEditingId(id); setEditTitle(title); }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          }
+
+          {/* Agents panel */}
+          {activeTab === 'agents' && (
+            <div className="mt-2">
+              <AgentsPanel />
+            </div>
+          )}
+
+          {/* Skills panel (shown under Tasks) */}
+          {activeTab === 'tasks' && (
+            <div className="mt-2">
+              <SkillsPanel />
+            </div>
+          )}
+
+          {/* Memory panel */}
+          {activeTab === 'memory' && (
+            <div className="mt-2">
+              <MemoryPanel />
+            </div>
+          )}
+
+          {/* Connectors panel */}
+          {activeTab === 'connectors' && (
+            <div className="mt-2">
+              <ConnectorsPanel />
+            </div>
+          )}
+
+          {/* Knowledge Bases panel (shown under Projects) */}
+          {activeTab === 'projects' && (
+            <div className="mt-2">
+              {selectedProjectId ? (
+                <KnowledgeBasePanel projectId={selectedProjectId} />
+              ) : (
+                <ProjectsPanel
+                  onSelectProject={setSelectedProjectId}
+                  selectedProjectId={selectedProjectId}
+                  onClose={() => setActiveTab('chats')}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Artifacts panel — global across all chats */}
+          {activeTab === 'artifacts' && (
+            <div className="mt-2">
+              <ArtifactPanel />
+            </div>
+          )}
+        </nav>
+
+        {/* User section */}
+        <div className="border-t border-border p-3">
+          <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-purple to-accent text-xs font-bold text-white">
+              F
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary truncate">Favour Chibuike</p>
+              <p className="text-[10px] text-text-muted truncate">Free Plan</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Context Menu */}
+      {contextMenu && (
         <div
-          className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setDrawerOpen(false)}
-        />
+          ref={contextMenuRef}
+          className="context-menu fixed z-[100] w-44 overflow-hidden rounded-xl border border-border bg-bg-secondary shadow-2xl"
+          style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 250) }}
+        >
+          <button
+            onClick={() => {
+              const conv = [...conversations, ...archivedConversations].find(c => c.id === contextMenu.id);
+              if (conv) { setEditingId(contextMenu.id); setEditTitle(conv.title); }
+              setContextMenu(null);
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+          >
+            <Pencil size={14} /> Rename
+          </button>
+          <button
+            onClick={() => { handleToggleStar(contextMenu.id); setContextMenu(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+          >
+            <Star size={14} /> {conversations.find(c => c.id === contextMenu.id)?.starred ? 'Unstar' : 'Star'}
+          </button>
+          <button
+            onClick={() => { handleArchiveConversation(contextMenu.id); setContextMenu(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+          >
+            <Archive size={14} /> Archive
+          </button>
+          <div className="my-0.5 h-px bg-border" />
+          <button
+            onClick={() => { handleDeleteConversation(contextMenu.id); setContextMenu(null); }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-red-500/10"
+          >
+            <Trash2 size={14} /> Delete
+          </button>
+        </div>
       )}
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="flex items-center gap-3 px-4 py-3 border-b border-[#2c2e33] bg-[#0d0f11]">
-          <button onClick={() => setDrawerOpen(true)} className="p-1 hover:bg-[#25262b] rounded">
-            <Menu size={20} />
-          </button>
-          <div className="flex items-center gap-2">
-            <Bot size={20} className="text-[#e8590c]" />
-            <span className="font-medium">Agent</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button className="p-1 hover:bg-[#25262b] rounded">
-              <Settings size={18} />
-            </button>
-          </div>
-        </header>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-[#909296]">
-              <Sparkles size={48} className="mb-4 text-[#e8590c]" />
-              <h2 className="text-xl font-medium mb-2">How can I help you today?</h2>
-              <p className="text-sm">Start a conversation or create a new one</p>
-            </div>
-          )}
-          {messages.map(msg => (
-            <div key={msg.id} className={cn(
-              "flex gap-3 max-w-3xl mx-auto",
-              msg.role === 'user' ? "justify-end" : "justify-start"
-            )}>
-              {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-full bg-[#e8590c] flex items-center justify-center flex-shrink-0">
-                  <Bot size={16} className="text-white" />
-                </div>
-              )}
-              <div className={cn(
-                "px-4 py-3 rounded-2xl max-w-[80%]",
-                msg.role === 'user'
-                  ? "bg-[#e8590c] text-white"
-                  : "bg-[#1c1e20] text-[#e4e5e7]"
-              )}>
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              </div>
-              {msg.role === 'user' && (
-                <div className="w-8 h-8 rounded-full bg-[#25262b] flex items-center justify-center flex-shrink-0">
-                  <User size={16} />
-                </div>
-              )}
-            </div>
-          ))}
-          {isStreaming && (
-            <div className="flex gap-3 max-w-3xl mx-auto">
-              <div className="w-8 h-8 rounded-full bg-[#e8590c] flex items-center justify-center flex-shrink-0">
-                <Bot size={16} className="text-white" />
-              </div>
-              <div className="px-4 py-3 rounded-2xl bg-[#1c1e20]">
-                <div className="streaming-indicator flex gap-1">
-                  <span className="w-2 h-2 bg-[#909296] rounded-full"></span>
-                  <span className="w-2 h-2 bg-[#909296] rounded-full"></span>
-                  <span className="w-2 h-2 bg-[#909296] rounded-full"></span>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+      {/* Main area */}
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Chat header with incognito toggle */}
+        <ChatPageHeader
+          onMenuClick={() => setSidebarOpen(true)}
+          incognito={incognito}
+          onToggleIncognito={toggleIncognito}
+          onBack={() => {
+            setActiveConversation(null);
+          }}
+          hasActiveConversation={!!activeConversation}
+        />
+        <div className="flex-1 min-h-0">
+          <ChatView />
         </div>
+      </main>
 
-        {/* Input Area - Bottom anchored */}
-        <div className="p-4 border-t border-[#2c2e33] bg-[#0d0f11]">
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-end gap-2 bg-[#141618] rounded-2xl border border-[#2c2e33] p-2">
-              <textarea
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                placeholder="Type a message..."
-                className="flex-1 bg-transparent resize-none outline-none px-3 py-2 text-sm max-h-32"
-                rows={1}
-              />
-              <button
-                onClick={sendMessage}
-                disabled={!inputValue.trim() || !activeConversation || isStreaming}
-                className={cn(
-                  "p-2 rounded-xl transition-colors",
-                  inputValue.trim() && activeConversation && !isStreaming
-                    ? "bg-[#e8590c] hover:bg-[#d4520e] text-white"
-                    : "bg-[#25262b] text-[#909296] cursor-not-allowed"
-                )}
-              >
-                <Send size={18} />
-              </button>
-            </div>
-            <p className="text-xs text-[#909296] text-center mt-2">
-              Press Enter to send, Shift+Enter for new line
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Settings Panel */}
+      {settingsPanelOpen && <SettingsPanel />}
+
+      {/* Model Selector */}
+      {modelSelectorOpen && <ModelSelector />}
+
+      {/* Add to Chat overlay */}
+      <AddToChatOverlay />
     </div>
+    </QueryClientProvider>
+  );
+}
+
+/* ─── Chat Page Header ─── */
+function ChatPageHeader({
+  onMenuClick,
+  incognito,
+  onToggleIncognito,
+  onBack,
+  hasActiveConversation,
+}: {
+  onMenuClick: () => void;
+  incognito: boolean;
+  onToggleIncognito: () => void;
+  onBack: () => void;
+  hasActiveConversation: boolean;
+}) {
+  return (
+    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3 md:px-4">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onMenuClick}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary md:hidden"
+        >
+          <Menu size={18} />
+        </button>
+        {hasActiveConversation && (
+          <button
+            onClick={onBack}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary md:hidden"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        {/* Incognito toggle */}
+        <button
+          onClick={onToggleIncognito}
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+            incognito
+              ? "bg-accent/15 text-accent"
+              : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+          )}
+          title={incognito ? "Incognito mode on — chats won't be saved" : "Turn on incognito mode"}
+        >
+          <EyeOff size={16} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+/* ─── Conversation Item ─── */
+function ConversationItem({
+  conv, isActive, editingId, editTitle, setEditTitle, onSelect, onContextMenu, onRename, onStartEdit
+}: {
+  conv: Conversation; isActive: boolean; editingId: string | null; editTitle: string;
+  setEditTitle: (v: string) => void; onSelect: () => void; onContextMenu: (e: React.MouseEvent) => void;
+  onRename: () => void; onStartEdit: (id: string, title: string) => void;
+}) {
+  const isEditing = editingId === conv.id;
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1 px-2 py-1">
+        <input
+          autoFocus
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onRename();
+            if (e.key === 'Escape') onStartEdit('', '');
+          }}
+          onBlur={onRename}
+          className="flex-1 rounded-md bg-bg-tertiary px-2 py-1 text-sm text-text-primary outline-none ring-1 ring-accent"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={onSelect}
+      onContextMenu={onContextMenu}
+      className={cn(
+        "group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors text-left",
+        isActive
+          ? "bg-bg-active text-accent"
+          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+      )}
+    >
+      <MessageSquare size={14} className="shrink-0" />
+      <span className="flex-1 truncate">{conv.title}</span>
+      {conv.starred && <Star size={12} className="shrink-0 text-warning fill-warning" />}
+      <button
+        onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+        className="hidden group-hover:flex h-5 w-5 shrink-0 items-center justify-center rounded text-text-muted hover:bg-bg-tertiary hover:text-text-primary"
+      >
+        <MoreHorizontal size={12} />
+      </button>
+    </button>
   );
 }

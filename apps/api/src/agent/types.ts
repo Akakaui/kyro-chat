@@ -3,6 +3,7 @@ import type { CoreMessage } from 'ai';
 export interface Agent {
   id: string;
   name: string;
+  type?: 'primary' | 'sub' | 'both';
   systemPrompt?: string;
   model?: string;
   provider?: string;
@@ -28,6 +29,8 @@ export interface ToolContext {
   agentId: string;
   sessionId?: string;
   abortSignal?: AbortSignal;
+  apiKey?: string;
+  provider?: string;
 }
 
 export interface ToolDefinition {
@@ -40,7 +43,7 @@ export interface ToolDefinition {
   /** Required permissions for this tool */
   permissions?: string[];
   /** Category for grouping in UI */
-  category?: 'file' | 'code' | 'search' | 'web' | 'agent' | 'artifacts';
+  category?: 'file' | 'code' | 'search' | 'web' | 'agent' | 'artifacts' | 'media';
 }
 
 export interface LifecycleHooks {
@@ -96,6 +99,7 @@ export interface AgentConfig {
   model: string;
   userId?: string;
   sessionId?: string;
+  sandboxId?: string;
   hooks?: LifecycleHooks;
   tools?: ToolDefinition[];
   maxIterations?: number;

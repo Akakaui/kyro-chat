@@ -61,5 +61,107 @@ agentRoutes.delete('/:id', async (c) => {
   const db = getDb();
 
   db.prepare(`DELETE FROM agents WHERE id = ? AND user_id = ?`).run(agentId, user.id);
+  // Clean up KB permissions for this agent
+  db.prepare(`DELETE FROM agent_kb_permissions WHERE agent_id = ? AND user_id = ?`).run(agentId, user.id);
   return c.json({ success: true });
+});
+
+// ─── Agent KB Permission Endpoints ───
+
+// List KB permissions for this agent
+agentRoutes.get('/:id/kb-permissions', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const db = getDb();
+
+  // Verify agent exists
+  const agent = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  const permissions = db.prepare(`
+    SELECT akp.id, akp.agent_id, akp.kb_id, akp.permission, akp.created_at,
+      kbs.source_file as kb_name
+    FROM agent_kb_permissions akp
+    LEFT JOIN (
+      SELECT DISTINCT kb_id, source_file FROM kb_chunks WHERE user_id = ?
+    ) kbs ON akp.kb_id = kbs.kb_id
+    WHERE akp.agent_id = ? AND akp.user_id = ?
+  `).all(user.id, agentId, user.id);
+
+  return c.json({ permissions });
+});
+
+// Update KB permissions for this agent
+agentRoutes.put('/:id/kb-permissions', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const { kbId, permission } = await c.req.json();
+  const db = getDb();
+
+  // Verify agent exists
+  const agent = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  if (!kbId || !permission || !['allow', 'ask', 'deny'].includes(permission)) {
+    return c.json({ error: 'kbId and valid permission (allow/ask/deny) required' }, 400);
+  }
+
+  const existing = db.prepare(`
+    SELECT id FROM agent_kb_permissions WHERE agent_id = ? AND kb_id = ?
+  `).get(agentId, kbId) as any;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE agent_kb_permissions SET permission = ? WHERE agent_id = ? AND kb_id = ?
+    `).run(permission, agentId, kbId);
+  } else {
+    db.prepare(`
+      INSERT INTO agent_kb_permissions (id, agent_id, kb_id, permission, user_id)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(crypto.randomUUID(), agentId, kbId, permission, user.id);
+  }
+
+  return c.json({ success: true, permission });
+});
+
+// List available KBs (global + project-scoped)
+agentRoutes.get('/:id/kb-available', async (c) => {
+  const user = c.get('user');
+  const agentId = c.req.param('id');
+  const db = getDb();
+
+  // Verify agent exists
+  const agent = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
+  if (!agent) {
+    return c.json({ error: 'Agent not found' }, 404);
+  }
+
+  // Get all KBs (global + project-scoped)
+  const allKBs = db.prepare(`
+    SELECT DISTINCT kb_id, source_file, project_id
+    FROM kb_chunks
+    WHERE user_id = ?
+  `).all(user.id) as Array<{ kb_id: string; source_file: string; project_id: string | null }>;
+
+  // Get existing permissions for this agent
+  const permissions = db.prepare(`
+    SELECT kb_id, permission FROM agent_kb_permissions
+    WHERE agent_id = ? AND user_id = ?
+  `).all(agentId, user.id) as Array<{ kb_id: string; permission: string }>;
+
+  const permMap = new Map(permissions.map(p => [p.kb_id, p.permission]));
+
+  // Merge KBs with their permissions (default: deny)
+  const available = allKBs.map(kb => ({
+    kb_id: kb.kb_id,
+    name: kb.source_file,
+    project_id: kb.project_id,
+    permission: permMap.get(kb.kb_id) || 'deny',
+  }));
+
+  return c.json({ kbs: available });
 });

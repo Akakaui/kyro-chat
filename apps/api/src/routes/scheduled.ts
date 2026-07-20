@@ -6,7 +6,22 @@ export const scheduledRoutes = new Hono();
 // Create scheduled task
 scheduledRoutes.post('/', async (c) => {
   const user = c.get('user');
-  const { name, description, type, cronExpression, scheduledAt, payload, agentId } = await c.req.json();
+  const {
+    name,
+    description,
+    type = 'recurring',
+    cronExpression = '1h',
+    scheduledAt,
+    payload,
+    agentId,
+    projectId,
+    permissionOverride = false,
+    emailNotification = true,
+  } = await c.req.json();
+
+  if (!name || !payload) {
+    return c.json({ error: 'name and payload are required' }, 400);
+  }
 
   const id = schedulerService.create(user.id, {
     name,
@@ -16,6 +31,9 @@ scheduledRoutes.post('/', async (c) => {
     scheduledAt,
     payload,
     agentId,
+    projectId,
+    permissionOverride,
+    emailNotification,
   });
 
   return c.json({ id });
@@ -24,7 +42,12 @@ scheduledRoutes.post('/', async (c) => {
 // List tasks
 scheduledRoutes.get('/', async (c) => {
   const user = c.get('user');
-  const tasks = schedulerService.list(user.id);
+  const projectId = c.req.query('projectId');
+
+  const tasks = projectId
+    ? schedulerService.listByProject(user.id, projectId)
+    : schedulerService.list(user.id);
+
   return c.json({ tasks });
 });
 
@@ -37,6 +60,18 @@ scheduledRoutes.get('/:id', async (c) => {
   if (!task) return c.json({ error: 'Not found' }, 404);
 
   return c.json({ task });
+});
+
+// Update task
+scheduledRoutes.put('/:id', async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const updates = await c.req.json();
+
+  const success = schedulerService.update(id, user.id, updates);
+  if (!success) return c.json({ error: 'Not found' }, 404);
+
+  return c.json({ success: true });
 });
 
 // Execute task immediately

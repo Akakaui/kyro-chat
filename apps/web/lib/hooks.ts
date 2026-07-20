@@ -1,6 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useChatStore } from "@/stores/chat"
 import {
   listConversations,
   createConversation,
@@ -100,8 +101,9 @@ export function useArtifacts(conversationId: string | null) {
 
 export function useCreateConversation() {
   const queryClient = useQueryClient()
+  const selectedProjectId = useChatStore((s) => s.selectedProjectId)
   return useMutation({
-    mutationFn: (title?: string) => createConversation(title),
+    mutationFn: (title?: string) => createConversation(title, selectedProjectId || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] })
     },

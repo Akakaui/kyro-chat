@@ -33,6 +33,6 @@ services:
     ports:
       - "6901:6901"
     environment:
-      - VNC_PASSWORD=${VNC_PASSWORD:-changeme}
-      - KASM_DISABLE_AUTH=${KASM_DISABLE_AUTH:-1}
+      - VNC_PASSWORD=${VNC_PASSWORD}
+      - KASM_DISABLE_AUTH=${KASM_DISABLE_AUTH:-0}
     restart: unless-stopped

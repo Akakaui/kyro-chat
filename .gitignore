@@ -10,3 +10,4 @@ data/
 .vercel/
 out/
 .DS_Store
+logs/
