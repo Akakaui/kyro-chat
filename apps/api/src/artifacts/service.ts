@@ -166,7 +166,7 @@ class ArtifactService {
   /**
    * Get artifact by ID
    */
-  get(id: string, userId: string): Artifact | null {
+  async get(id: string, userId: string): Promise<Artifact | null> {
     const db = getDb();
     const artifact = await db.prepare(`
       SELECT * FROM artifacts WHERE id = ? AND user_id = ?
@@ -194,7 +194,7 @@ class ArtifactService {
   /**
    * List user's artifacts
    */
-  list(userId: string, limit: number = 50): Artifact[] {
+  async list(userId: string, limit: number = 50): Promise<Artifact[]> {
     const db = getDb();
     const artifacts = await db.prepare(`
       SELECT * FROM artifacts
@@ -223,11 +223,11 @@ class ArtifactService {
   /**
    * Update artifact
    */
-  update(
+  async update(
     id: string,
     userId: string,
     updates: Partial<Pick<Artifact, 'title' | 'content' | 'metadata'>>
-  ): boolean {
+  ): Promise<boolean> {
     const db = getDb();
     const result = await db.prepare(`
       UPDATE artifacts
@@ -250,7 +250,7 @@ class ArtifactService {
   /**
    * Delete artifact
    */
-  delete(id: string, userId: string): boolean {
+  async delete(id: string, userId: string): Promise<boolean> {
     const db = getDb();
     const result = await db.prepare(`
       DELETE FROM artifacts WHERE id = ? AND user_id = ?
@@ -262,11 +262,11 @@ class ArtifactService {
   /**
    * Generate temporary share link
    */
-  createShareLink(
+  async createShareLink(
     id: string,
     userId: string,
     expiresInHours: number = 24
-  ): { shareUrl: string; expiresAt: number } | null {
+  ): Promise<{ shareUrl: string; expiresAt: number } | null> {
     const db = getDb();
     const artifact = this.get(id, userId);
     if (!artifact) return null;
@@ -294,7 +294,7 @@ class ArtifactService {
   /**
    * Get artifact by share hash (public access)
    */
-  getByShareHash(hash: string): Artifact | null {
+  async getByShareHash(hash: string): Promise<Artifact | null> {
     const db = getDb();
     const artifact = await db.prepare(`
       SELECT * FROM artifacts
@@ -324,7 +324,7 @@ class ArtifactService {
   /**
    * Revoke share link
    */
-  revokeShareLink(id: string, userId: string): boolean {
+  async revokeShareLink(id: string, userId: string): Promise<boolean> {
     const db = getDb();
     const result = await db.prepare(`
       UPDATE artifacts
