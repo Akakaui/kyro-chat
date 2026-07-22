@@ -59,6 +59,10 @@ interface ChatState {
   isStreaming: boolean
   setStreaming: (streaming: boolean) => void
 
+  // Agent status
+  agentStatus: "idle" | "thinking" | "searching" | "browsing" | "writing_file" | "editing_file" | "running_command" | "sandbox_active"
+  setAgentStatus: (status: "idle" | "thinking" | "searching" | "browsing" | "writing_file" | "editing_file" | "running_command" | "sandbox_active") => void
+
   // Panel
   panelOpen: boolean
   togglePanel: () => void
@@ -200,6 +204,7 @@ interface ChatState {
   tasks: Array<{ id: string; name: string; status: "running" | "done" | "error" }>
   addTask: (task: { id: string; name: string; status: "running" | "done" | "error" }) => void
   updateTask: (id: string, status: "running" | "done" | "error") => void
+  cancelSubtask: (taskId: string) => void
   clearTasks: () => void
 
   // Human using browser (agent takeover state)
@@ -311,6 +316,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isStreaming: false,
   setStreaming: (streaming) => set({ isStreaming: streaming }),
 
+  // Agent status
+  agentStatus: "idle",
+  setAgentStatus: (status) => set({ agentStatus: status }),
+
   // Panel
   panelOpen: false,
   togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
@@ -329,6 +338,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       artifacts: true,
       code_execution: true,
       memory: true,
+      rag: true,
     },
     appearance: {
       theme: "dark",
@@ -580,6 +590,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       tasks: state.tasks.map((t) => (t.id === id ? { ...t, status } : t)),
     })),
+  cancelSubtask: (taskId) => {
+    // Mark the task as error (cancelled) and dispatch event for backend
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === taskId ? { ...t, status: "error" as const } : t
+      ),
+    }))
+    window.dispatchEvent(
+      new CustomEvent("kyro:cancel-subtask", { detail: { taskId } })
+    )
+  },
   clearTasks: () => set({ tasks: [] }),
 
   // Human using browser

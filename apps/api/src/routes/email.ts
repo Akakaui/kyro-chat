@@ -6,6 +6,44 @@ import { sanitizeError } from '../lib/sanitize-error.js';
 
 export const emailRoutes = new Hono();
 
+// Fetch inbox emails
+emailRoutes.get('/inbox', async (c) => {
+  const user = c.get('user');
+  const limit = parseInt(c.req.query('limit') || '50');
+
+  try {
+    await emailService.initializeFromStored(user.id);
+    const emails = await emailService.fetchInbox(limit);
+    return c.json({ emails });
+  } catch (error) {
+    return c.json({ error: sanitizeError(error) }, 500);
+  }
+});
+
+// Mark email as read
+emailRoutes.put('/read/:uid', async (c) => {
+  const uid = c.req.param('uid');
+
+  try {
+    await emailService.markAsRead(uid);
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: sanitizeError(error) }, 500);
+  }
+});
+
+// Mark email as unread
+emailRoutes.put('/unread/:uid', async (c) => {
+  const uid = c.req.param('uid');
+
+  try {
+    await emailService.markAsUnread(uid);
+    return c.json({ success: true });
+  } catch (error) {
+    return c.json({ error: sanitizeError(error) }, 500);
+  }
+});
+
 // Get email settings
 emailRoutes.get('/settings', async (c) => {
   const user = c.get('user');

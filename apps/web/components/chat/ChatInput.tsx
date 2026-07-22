@@ -11,9 +11,12 @@ import {
   Image,
   Shield,
   ShieldCheck,
-  Users,
   Wrench,
   Hammer,
+  MoreHorizontal,
+  Globe,
+  Search,
+  Brain,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useChatStore } from "@/stores/chat"
@@ -38,11 +41,10 @@ interface ChatInputProps {
   onFilesSelect?: (files: AttachedFile[]) => void
   attachedFiles?: AttachedFile[]
   onRemoveFile?: (index: number) => void
-  activeTools?: { name: string; status: "running" | "done" | "error" }[]
   taskBadge?: React.ReactNode
 }
 
-export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, activeTools = [], taskBadge }: ChatInputProps) {
+export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, taskBadge }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const {
@@ -62,6 +64,10 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
     fetchSkills,
     fetchAgents,
     fetchKnowledgeBases,
+    browserEnabled,
+    toggleBrowserEnabled,
+    settings,
+    toggleWebSearch,
   } = useChatStore()
 
   const [value, setValue] = React.useState("")
@@ -81,6 +87,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
   const [selectedIndex, setSelectedIndex] = React.useState(0)
   const [selectedCommand, setSelectedCommand] = React.useState<string | null>(null)
   const [showPlusMenu, setShowPlusMenu] = React.useState(false)
+  const [showSecondaryMenu, setShowSecondaryMenu] = React.useState(false)
 
   const slashFilteredCount = React.useMemo(() => {
     if (!showSlashMenu) return 0
@@ -202,6 +209,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
     setSelectedIndex(0)
     setSelectedCommand(null)
     setShowPlusMenu(false)
+    setShowSecondaryMenu(false)
   }, [])
 
   const handleSlashSelect = useCallback(
@@ -344,7 +352,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
   }
 
   return (
-    <div className="safe-bottom border-t border-border bg-bg-primary px-3 py-3 md:px-4">
+    <div className="border-t border-border bg-bg-primary px-3 py-3 safe-area-inset-bottom md:px-4">
       <div className="mx-auto max-w-3xl">
         <div className="relative">
           <input
@@ -408,34 +416,6 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
           {/* Task badge — shows task progress during streaming */}
           {taskBadge && <div className="mb-2">{taskBadge}</div>}
 
-          {/* Task progress display — shows active tools during streaming */}
-          {isStreaming && activeTools.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {activeTools.map((tool, i) => (
-                <div
-                  key={`${tool.name}-${i}`}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
-                    tool.status === "running"
-                      ? "border-accent/30 bg-accent/10 text-accent"
-                      : tool.status === "done"
-                        ? "border-success/30 bg-success/10 text-success"
-                        : "border-danger/30 bg-danger/10 text-danger"
-                  )}
-                >
-                  {tool.status === "running" ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : tool.status === "done" ? (
-                    <span className="text-[10px]">&#10003;</span>
-                  ) : (
-                    <X size={10} />
-                  )}
-                  <span className="font-medium">{tool.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Input bar */}
           <div className="flex items-end gap-1.5 rounded-2xl border border-border bg-bg-secondary p-2 md:gap-2">
             {/* Plus button — menu for files + attachments */}
@@ -488,11 +468,41 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
               className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-text-muted hover:text-text-primary"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
-              {selectedModel.name}
+              <span className="hidden sm:inline">{selectedModel.name}</span>
+              <span className="sm:hidden text-[10px]">Model</span>
             </button>
 
-            {/* Act / Build mode switcher */}
-            <div className="flex shrink-0 overflow-hidden rounded-full border border-border bg-bg-tertiary">
+            {/* Browser / Search / RAG toggles */}
+            <div className="hidden shrink-0 overflow-hidden rounded-full border border-border bg-bg-tertiary sm:flex">
+              <button
+                onClick={toggleBrowserEnabled}
+                title={browserEnabled ? "Browser: ON" : "Browser: OFF"}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1.5 text-xs font-medium transition-colors",
+                  browserEnabled
+                    ? "bg-accent text-white"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
+              >
+                <Globe size={14} />
+              </button>
+              <button
+                onClick={toggleWebSearch}
+                title={settings.capabilities.web_search ? "Web Search: ON" : "Web Search: OFF"}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1.5 text-xs font-medium transition-colors",
+                  settings.capabilities.web_search
+                    ? "bg-accent text-white"
+                    : "text-text-secondary hover:text-text-primary"
+                )}
+              >
+                <Search size={14} />
+              </button>
+
+            </div>
+
+            {/* Act / Build mode switcher — hidden on mobile, shown on tablet+ */}
+            <div className="hidden shrink-0 overflow-hidden rounded-full border border-border bg-bg-tertiary sm:flex">
               <button
                 onClick={() => setChatMode("act")}
                 className={cn(
@@ -519,12 +529,12 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
               </button>
             </div>
 
-            {/* Accept All permissions */}
+            {/* Accept All permissions — hidden on mobile */}
             <button
               onClick={toggleAcceptAll}
               title={acceptAll ? "Accept all permissions: ON" : "Accept all permissions: OFF"}
               className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
+                "hidden shrink-0 items-center justify-center rounded-lg transition-colors sm:flex h-8 w-8",
                 acceptAll
                   ? "bg-success/15 text-success"
                   : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
@@ -533,16 +543,90 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, act
               {acceptAll ? <ShieldCheck size={20} /> : <Shield size={20} />}
             </button>
 
-            {/* Delegate to sub-agent */}
-            <button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent("kyro:open-delegate"))
-              }}
-              title="Delegate to sub-agent"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-            >
-              <Users size={20} />
-            </button>
+            {/* Mobile secondary menu (…) — shows Act/Build + permissions on small screens */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowSecondaryMenu(!showSecondaryMenu)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                aria-label="More options"
+              >
+                <MoreHorizontal size={20} />
+              </button>
+
+              {showSecondaryMenu && (
+                <div className="context-menu absolute bottom-full right-0 mb-2 w-48 overflow-hidden rounded-xl border border-border bg-bg-secondary shadow-xl">
+                  {/* Act/Build mode */}
+                  <div className="flex border-b border-border">
+                    <button
+                      onClick={() => { setChatMode("act"); setShowSecondaryMenu(false) }}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
+                        chatMode === "act"
+                          ? "bg-accent text-white"
+                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+                      )}
+                    >
+                      <Wrench size={14} />
+                      Act
+                    </button>
+                    <button
+                      onClick={() => { setChatMode("build"); setShowSecondaryMenu(false) }}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
+                        chatMode === "build"
+                          ? "bg-accent text-white"
+                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+                      )}
+                    >
+                      <Hammer size={14} />
+                      Build
+                    </button>
+                  </div>
+
+                  {/* Browser / Search / RAG toggles */}
+                  <div className="flex border-b border-border">
+                    <button
+                      onClick={() => { toggleBrowserEnabled() }}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
+                        browserEnabled
+                          ? "bg-accent text-white"
+                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+                      )}
+                    >
+                      <Globe size={14} />
+                      Browser
+                    </button>
+                    <button
+                      onClick={() => { toggleWebSearch() }}
+                      className={cn(
+                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
+                        settings.capabilities.web_search
+                          ? "bg-accent text-white"
+                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+                      )}
+                    >
+                      <Search size={14} />
+                      Search
+                    </button>
+
+                  </div>
+
+                  {/* Accept All toggle */}
+                  <button
+                    onClick={() => { toggleAcceptAll(); setShowSecondaryMenu(false) }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                  >
+                    {acceptAll ? (
+                      <ShieldCheck size={18} className="text-success" />
+                    ) : (
+                      <Shield size={18} />
+                    )}
+                    {acceptAll ? "Permissions: ON" : "Permissions: OFF"}
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Text input */}
             <textarea

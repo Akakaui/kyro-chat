@@ -125,6 +125,14 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
   let agent = null;
   let systemPrompt = 'You are a helpful AI assistant.';
   let allowedKBContext = '';
+  let pendingAskKBs: Array<{ kb_id: string; source_file: string }> = [];
+
+  // Check global KB setting
+  const kbGlobalSetting = db.prepare(`
+    SELECT value FROM user_settings WHERE user_id = ? AND key = 'kb_global_enabled'
+  `).get(user.id) as any;
+  const kbGlobalEnabled = kbGlobalSetting ? kbGlobalSetting.value === 'true' : true;
+
   if (agentId) {
     agent = db.prepare(`
       SELECT * FROM agents WHERE id = ? AND user_id = ?
@@ -133,31 +141,48 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
       systemPrompt = agent.system_prompt;
     }
 
-    // Gather KB permissions and auto-inject "allow" KB content
-    const kbPerms = db.prepare(`
-      SELECT akp.kb_id, akp.permission, kbs.source_file
-      FROM agent_kb_permissions akp
-      LEFT JOIN (
-        SELECT DISTINCT kb_id, source_file FROM kb_chunks WHERE user_id = ?
-      ) kbs ON akp.kb_id = kbs.kb_id
-      WHERE akp.agent_id = ? AND akp.permission = 'allow'
-    `).all(user.id, agentId) as Array<{ kb_id: string; permission: string; source_file: string }>;
+    // Auto-inject project custom instructions into system prompt
+    if (conversation.project_id) {
+      const project = db.prepare(`
+        SELECT custom_instructions FROM projects WHERE id = ? AND user_id = ?
+      `).get(conversation.project_id, user.id) as any;
+      if (project?.custom_instructions) {
+        systemPrompt = `${project.custom_instructions}\n\n${systemPrompt}`;
+      }
+    }
 
-    // Fetch content from "allow" KBs
-    if (kbPerms.length > 0) {
+    // Gather KB permissions and auto-inject "allow" KB content
+    // Only if global KB toggle is enabled
+    if (kbGlobalEnabled) {
+      const kbPerms = db.prepare(`
+        SELECT akp.kb_id, akp.permission, kbs.source_file
+        FROM agent_kb_permissions akp
+        LEFT JOIN (
+          SELECT DISTINCT kb_id, source_file FROM kb_chunks WHERE user_id = ?
+        ) kbs ON akp.kb_id = kbs.kb_id
+        WHERE akp.agent_id = ?
+      `).all(user.id, agentId) as Array<{ kb_id: string; permission: string; source_file: string }>;
+
       const { searchChunks } = await import('../kb/vector.js');
       const kbContextParts: string[] = [];
 
       for (const kb of kbPerms) {
-        try {
-          const results = await searchChunks(kb.kb_id, content, 3, user.id);
-          if (results.length > 0) {
-            const kbContent = results.map((r: any) => r.content).join('\n');
-            kbContextParts.push(`[KB: ${kb.source_file}]\n${kbContent}`);
+        if (kb.permission === 'allow') {
+          // Auto-inject allowed KBs
+          try {
+            const results = await searchChunks(kb.kb_id, content, 3, user.id);
+            if (results.length > 0) {
+              const kbContent = results.map((r: any) => r.content).join('\n');
+              kbContextParts.push(`[KB: ${kb.source_file}]\n${kbContent}`);
+            }
+          } catch (err) {
+            console.error(`Failed to fetch KB ${kb.kb_id}:`, err);
           }
-        } catch (err) {
-          console.error(`Failed to fetch KB ${kb.kb_id}:`, err);
+        } else if (kb.permission === 'ask') {
+          // Track "ask" KBs for permission request
+          pendingAskKBs.push({ kb_id: kb.kb_id, source_file: kb.source_file });
         }
+        // "deny" KBs are silently skipped
       }
 
       if (kbContextParts.length > 0) {
@@ -191,6 +216,12 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
   // Stream response using agent orchestrator
   return stream(c, async (streamWriter) => {
     let fullResponse = '';
+
+    // Send pending KB permission requests to frontend before streaming
+    if (pendingAskKBs.length > 0) {
+      const metaEvent = `__META__:${JSON.stringify({ pendingAskKBs })}\n`;
+      await streamWriter.write(metaEvent);
+    }
 
     // Inject KB context into system prompt
     const enrichedSystemPrompt = systemPrompt + allowedKBContext;

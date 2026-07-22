@@ -35,6 +35,8 @@ export function ChatView() {
     updateTask,
     clearTasks,
     humanUsingBrowser,
+    agentStatus,
+    setAgentStatus,
   } = useChatStore()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -42,17 +44,6 @@ export function ChatView() {
   const [attachedFiles, setAttachedFiles] = React.useState<AttachedFile[]>([])
   const createConversation = useCreateConversation()
   const messagesQuery = useMessages(activeConversation)
-
-  // Derive active tools from the last assistant message for task progress display
-  const activeTools = React.useMemo(() => {
-    if (!isStreaming) return []
-    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant")
-    if (!lastAssistant?.tool_use?.length) return []
-    return lastAssistant.tool_use.map((t) => ({
-      name: t.name,
-      status: t.output ? ("done" as const) : ("running" as const),
-    }))
-  }, [messages, isStreaming])
 
   // Derive browser state for overlay
   const browserState = React.useMemo(() => {
@@ -111,6 +102,10 @@ export function ChatView() {
     abortControllerRef.current = null
   }, [])
 
+  const handleCancelTool = useCallback((taskId: string) => {
+    useChatStore.getState().cancelSubtask(taskId)
+  }, [])
+
   const handleSend = useCallback(
     async (content: string, files: AttachedFile[] = []) => {
       let convId = activeConversation
@@ -133,6 +128,7 @@ export function ChatView() {
       }
       addMessage(userMsg)
       setStreaming(true)
+      setAgentStatus("thinking")
       clearTasks()
 
       const assistantMsgId = `temp-assistant-${Date.now()}`
@@ -164,6 +160,52 @@ export function ChatView() {
                 useChatStore.getState().setSandboxId(sandboxId)
               } catch {}
               accumulated = accumulated.slice(0, sandboxIdx)
+            }
+
+            // Parse tool start marker
+            const toolStartMarker = "__TOOL_START__:"
+            const toolStartIdx = accumulated.indexOf(toolStartMarker)
+            if (toolStartIdx !== -1) {
+              try {
+                const toolData = JSON.parse(accumulated.slice(toolStartIdx + toolStartMarker.length))
+                // Map tool name to agent status
+                const toolName = toolData.name?.toLowerCase() || ""
+                let status: "idle" | "thinking" | "searching" | "browsing" | "writing_file" | "editing_file" | "running_command" | "sandbox_active" = "thinking"
+                
+                if (toolName.includes("web_search") || toolName.includes("search")) {
+                  status = "searching"
+                } else if (toolName.includes("browse") || toolName.includes("browser")) {
+                  status = "browsing"
+                } else if (toolName.includes("write_file") || toolName.includes("create_file") || toolName.includes("write")) {
+                  status = "writing_file"
+                } else if (toolName.includes("edit") || toolName.includes("patch")) {
+                  status = "editing_file"
+                } else if (toolName.includes("bash") || toolName.includes("terminal") || toolName.includes("exec")) {
+                  status = "running_command"
+                } else if (toolName.includes("sandbox")) {
+                  status = "sandbox_active"
+                }
+                
+                useChatStore.getState().setAgentStatus(status)
+              } catch {}
+              accumulated = accumulated.slice(0, toolStartIdx)
+            }
+
+            // Parse tool done marker
+            const toolDoneMarker = "__TOOL_DONE__:"
+            const toolDoneIdx = accumulated.indexOf(toolDoneMarker)
+            if (toolDoneIdx !== -1) {
+              try {
+                const toolData = JSON.parse(accumulated.slice(toolDoneIdx + toolDoneMarker.length))
+                // Update task status
+                const existing = useChatStore.getState().tasks.find((task) => task.name === toolData.name)
+                if (existing) {
+                  useChatStore.getState().updateTask(existing.id, toolData.status || "done")
+                }
+                // Reset status to thinking after tool completes
+                useChatStore.getState().setAgentStatus("thinking")
+              } catch {}
+              accumulated = accumulated.slice(0, toolDoneIdx)
             }
 
             // Parse artifacts marker
@@ -246,7 +288,10 @@ export function ChatView() {
               accumulated = accumulated.slice(0, qIdx)
             }
           },
-          () => setStreaming(false),
+          () => {
+            setStreaming(false)
+            setAgentStatus("idle")
+          },
           (errorMsg) => {
             updateMessage(assistantMsgId, { content: accumulated || "" })
             if (!accumulated) {
@@ -267,11 +312,12 @@ export function ChatView() {
           updateMessage(assistantMsgId, { content: "Sorry, something went wrong. Please try again." })
         }
         setStreaming(false)
+        setAgentStatus("idle")
       } finally {
         abortControllerRef.current = null
       }
     },
-    [activeConversation, createConversation, addMessage, updateMessage, setStreaming, selectedModel]
+    [activeConversation, createConversation, addMessage, updateMessage, setStreaming, setAgentStatus, selectedModel]
   )
 
   const handleRegenerate = useCallback(
@@ -314,6 +360,52 @@ export function ChatView() {
                 useChatStore.getState().setSandboxId(sandboxId)
               } catch {}
               accumulated = accumulated.slice(0, sandboxIdx)
+            }
+
+            // Parse tool start marker
+            const toolStartMarker = "__TOOL_START__:"
+            const toolStartIdx = accumulated.indexOf(toolStartMarker)
+            if (toolStartIdx !== -1) {
+              try {
+                const toolData = JSON.parse(accumulated.slice(toolStartIdx + toolStartMarker.length))
+                // Map tool name to agent status
+                const toolName = toolData.name?.toLowerCase() || ""
+                let status: "idle" | "thinking" | "searching" | "browsing" | "writing_file" | "editing_file" | "running_command" | "sandbox_active" = "thinking"
+                
+                if (toolName.includes("web_search") || toolName.includes("search")) {
+                  status = "searching"
+                } else if (toolName.includes("browse") || toolName.includes("browser")) {
+                  status = "browsing"
+                } else if (toolName.includes("write_file") || toolName.includes("create_file") || toolName.includes("write")) {
+                  status = "writing_file"
+                } else if (toolName.includes("edit") || toolName.includes("patch")) {
+                  status = "editing_file"
+                } else if (toolName.includes("bash") || toolName.includes("terminal") || toolName.includes("exec")) {
+                  status = "running_command"
+                } else if (toolName.includes("sandbox")) {
+                  status = "sandbox_active"
+                }
+                
+                useChatStore.getState().setAgentStatus(status)
+              } catch {}
+              accumulated = accumulated.slice(0, toolStartIdx)
+            }
+
+            // Parse tool done marker
+            const toolDoneMarker = "__TOOL_DONE__:"
+            const toolDoneIdx = accumulated.indexOf(toolDoneMarker)
+            if (toolDoneIdx !== -1) {
+              try {
+                const toolData = JSON.parse(accumulated.slice(toolDoneIdx + toolDoneMarker.length))
+                // Update task status
+                const existing = useChatStore.getState().tasks.find((task) => task.name === toolData.name)
+                if (existing) {
+                  useChatStore.getState().updateTask(existing.id, toolData.status || "done")
+                }
+                // Reset status to thinking after tool completes
+                useChatStore.getState().setAgentStatus("thinking")
+              } catch {}
+              accumulated = accumulated.slice(0, toolDoneIdx)
             }
 
             // Parse artifacts marker
@@ -381,7 +473,10 @@ export function ChatView() {
               accumulated = accumulated.slice(0, qIdx)
             }
           },
-          () => setStreaming(false),
+          () => {
+            setStreaming(false)
+            setAgentStatus("idle")
+          },
           (errorMsg) => {
             updateMessage(assistantMsgId, { content: accumulated || "" })
             if (!accumulated) {
@@ -402,11 +497,12 @@ export function ChatView() {
           updateMessage(assistantMsgId, { content: "Sorry, something went wrong. Please try again." })
         }
         setStreaming(false)
+        setAgentStatus("idle")
       } finally {
         abortControllerRef.current = null
       }
     },
-    [messages, activeConversation, setMessages, addMessage, updateMessage, setStreaming, selectedModel]
+    [messages, activeConversation, setMessages, addMessage, updateMessage, setStreaming, setAgentStatus, selectedModel]
   )
 
   const handleUndo = useCallback(
@@ -486,8 +582,8 @@ export function ChatView() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Messages area — bottom padding accounts for fixed input on mobile */}
+      <div className="flex-1 overflow-y-auto pb-[140px] sm:pb-0">
         <div className="mx-auto max-w-3xl">
           {!hasMessages ? (
             <EmptyState />
@@ -500,6 +596,7 @@ export function ChatView() {
                   isLast={i === messages.length - 1}
                   onRegenerate={handleRegenerate}
                   onUndo={handleUndo}
+                  onCancelTool={handleCancelTool}
                 />
               ))}
               {isStreaming && <StreamingIndicator messages={messages} />}
@@ -544,12 +641,12 @@ export function ChatView() {
         </div>
       )}
 
-      {/* Input with stop button overlay */}
-      <div className="relative">
+      {/* Input with stop button overlay — fixed bottom on mobile */}
+      <div className="fixed inset-x-0 bottom-0 z-30 sm:relative sm:inset-x-auto sm:bottom-auto sm:z-auto">
         {isStreaming && (
           <button
             onClick={handleStopStreaming}
-            className="absolute right-4 bottom-5 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-danger text-white shadow-lg transition-colors hover:bg-red-600"
+            className="absolute right-4 bottom-5 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-danger text-white shadow-lg transition-colors hover:bg-red-600 sm:right-4 sm:bottom-5"
             title="Stop generating"
           >
             <Square size={14} fill="currentColor" />
@@ -565,7 +662,6 @@ export function ChatView() {
               return prev.filter((_, i) => i !== index)
             })
           }
-          activeTools={activeTools}
           taskBadge={taskInfo.length > 0 ? <TaskBadge tasks={taskInfo} /> : undefined}
         />
       </div>
@@ -582,9 +678,34 @@ export function ChatView() {
 }
 
 function StreamingIndicator({ messages }: { messages: any[] }) {
+  const agentStatus = useChatStore((s) => s.agentStatus)
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant")
   const toolUse = lastAssistantMsg?.tool_use
 
+  // Map agent status to display text and icon
+  const getStatusDisplay = () => {
+    switch (agentStatus) {
+      case "searching":
+        return { text: "Searching the web...", icon: <Globe size={12} className="animate-pulse text-accent" /> }
+      case "browsing":
+        return { text: "Browsing website...", icon: <Globe size={12} className="animate-pulse text-accent" /> }
+      case "writing_file":
+        return { text: "Writing file...", icon: <Wrench size={12} className="animate-pulse text-accent" /> }
+      case "editing_file":
+        return { text: "Editing file...", icon: <Wrench size={12} className="animate-pulse text-accent" /> }
+      case "running_command":
+        return { text: "Running command...", icon: <Wrench size={12} className="animate-pulse text-accent" /> }
+      case "sandbox_active":
+        return { text: "Working in sandbox...", icon: <Wrench size={12} className="animate-pulse text-accent" /> }
+      case "thinking":
+      default:
+        return { text: "Thinking...", icon: <span className="streaming-indicator flex gap-0.5"><span className="inline-block h-1 w-1 rounded-full bg-accent" /><span className="inline-block h-1 w-1 rounded-full bg-accent" /><span className="inline-block h-1 w-1 rounded-full bg-accent" /></span> }
+    }
+  }
+
+  const { text, icon } = getStatusDisplay()
+
+  // Show tool-specific status if available
   if (toolUse && toolUse.length > 0) {
     const lastTool = toolUse[toolUse.length - 1]
     return (
@@ -599,12 +720,8 @@ function StreamingIndicator({ messages }: { messages: any[] }) {
 
   return (
     <div className="flex items-center gap-2 px-4 text-xs text-text-muted md:px-0">
-      <span className="streaming-indicator flex gap-0.5">
-        <span className="inline-block h-1 w-1 rounded-full bg-accent" />
-        <span className="inline-block h-1 w-1 rounded-full bg-accent" />
-        <span className="inline-block h-1 w-1 rounded-full bg-accent" />
-      </span>
-      Thinking...
+      {icon}
+      <span>{text}</span>
     </div>
   )
 }

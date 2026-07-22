@@ -233,6 +233,8 @@ export class AgentOrchestrator {
     const queuedPermissionEvents: string[] = [];
     // Question events to emit during streaming (set by askQuestion in context, yielded by generator)
     const queuedQuestionEvents: string[] = [];
+    // Tool status events to emit during streaming (set by onStepFinish, yielded by generator)
+    const queuedToolEvents: string[] = [];
 
     try {
       const model = getModel(
@@ -270,6 +272,15 @@ export class AgentOrchestrator {
                   context,
                 });
 
+                // Emit __TOOL_DONE__ with error status for blocked tool
+                const toolDonePayload = JSON.stringify({
+                  id: `tool-${Date.now()}`,
+                  name: toolCall.toolName,
+                  status: 'error',
+                  error: beforeResult.reason || 'Blocked by permission system',
+                });
+                queuedToolEvents.push(`\n__TOOL_DONE__:${toolDonePayload}\n`);
+
                 // Emit __PERMISSION_REQUIRED__ marker for the frontend
                 const permissionId = crypto.randomUUID();
                 const payload = JSON.stringify({
@@ -284,6 +295,14 @@ export class AgentOrchestrator {
                 await new Promise<void>((resolve) => {
                   pendingPermissions.set(permissionId, { resolve: (allowed: boolean) => {
                     if (allowed) {
+                      // Emit __TOOL_START__ for the retried tool
+                      const toolStartPayload = JSON.stringify({
+                        id: `tool-${Date.now()}`,
+                        name: toolCall.toolName,
+                        args: toolArgs,
+                      });
+                      queuedToolEvents.push(`\n__TOOL_START__:${toolStartPayload}\n`);
+
                       const resultPromise = executeRegisteredTool(toolCall.toolName, toolArgs, context);
                       resultPromise.then((result) => {
                         this.state.toolsUsed.push({
@@ -291,6 +310,13 @@ export class AgentOrchestrator {
                           args: toolArgs,
                           result,
                         });
+                        // Emit __TOOL_DONE__ for completed tool
+                        const toolDonePayload = JSON.stringify({
+                          id: `tool-${Date.now()}`,
+                          name: toolCall.toolName,
+                          status: 'done',
+                        });
+                        queuedToolEvents.push(`\n__TOOL_DONE__:${toolDonePayload}\n`);
                       });
                     } else {
                       this.state.toolsUsed.push({
@@ -298,6 +324,14 @@ export class AgentOrchestrator {
                         args: toolArgs,
                         result: { error: 'User denied permission' },
                       });
+                      // Emit __TOOL_DONE__ with error for denied tool
+                      const toolDonePayload = JSON.stringify({
+                        id: `tool-${Date.now()}`,
+                        name: toolCall.toolName,
+                        status: 'error',
+                        error: 'User denied permission',
+                      });
+                      queuedToolEvents.push(`\n__TOOL_DONE__:${toolDonePayload}\n`);
                     }
                     resolve();
                   }});
@@ -305,6 +339,14 @@ export class AgentOrchestrator {
 
                 continue;
               }
+
+              // Emit __TOOL_START__ marker before tool execution
+              const toolStartPayload = JSON.stringify({
+                id: `tool-${Date.now()}`,
+                name: toolCall.toolName,
+                args: toolArgs,
+              });
+              queuedToolEvents.push(`\n__TOOL_START__:${toolStartPayload}\n`);
 
               let toolResult = await executeRegisteredTool(toolCall.toolName, toolArgs, context);
 
@@ -323,6 +365,14 @@ export class AgentOrchestrator {
                 args: toolArgs,
                 result: toolResult,
               });
+
+              // Emit __TOOL_DONE__ marker after tool execution
+              const toolDonePayload = JSON.stringify({
+                id: `tool-${Date.now()}`,
+                name: toolCall.toolName,
+                status: 'done',
+              });
+              queuedToolEvents.push(`\n__TOOL_DONE__:${toolDonePayload}\n`);
             }
           }
         },
@@ -334,13 +384,17 @@ export class AgentOrchestrator {
         fullText += chunk;
         yield chunk;
 
-        // Yield any queued permission and question events
+        // Yield any queued permission, question, and tool events
         while (queuedPermissionEvents.length > 0) {
           const event = queuedPermissionEvents.shift()!;
           yield event;
         }
         while (queuedQuestionEvents.length > 0) {
           const event = queuedQuestionEvents.shift()!;
+          yield event;
+        }
+        while (queuedToolEvents.length > 0) {
+          const event = queuedToolEvents.shift()!;
           yield event;
         }
       }
@@ -403,7 +457,7 @@ export class AgentOrchestrator {
     const sandboxToolNames = hasSandbox ? [
       'execute_command', 'read_file', 'write_file', 'edit_file', 'patch_files',
       'search_files', 'search_content', 'list_files', 'http_request',
-      'search_code', 'lint_code', 'install_package', 'delegate_to_agent',
+      'search_code', 'lint_code', 'install_package',
     ] : [];
     enabledNames = enabledNames.filter(n =>
       allTools.some(t => t.name === n) || sandboxToolNames.includes(n)

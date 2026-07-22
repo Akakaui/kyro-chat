@@ -373,50 +373,6 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
     },
   },
 
-  // 12. delegate_to_agent
-  {
-    name: 'delegate_to_agent',
-    description: 'Delegate a task to a sub-agent (sub-agents cannot create artifacts or use file tools)',
-    category: 'agent',
-    parameters: z.object({
-      task: z.string().describe('Task description for the sub-agent'),
-      agent_id: z.string().optional().describe('Sub-agent ID (uses default if omitted)'),
-    }),
-    execute: async (args, ctx): Promise<ToolResult> => {
-      const task = args.task as string;
-      const agentId = args.agent_id as string | undefined;
-
-      try {
-        const { subAgentManager } = await import('../agent/subagent.js');
-        const db = (await import('../db/init.js')).getDb();
-
-        let targetAgentId: string | undefined = agentId;
-        if (!targetAgentId) {
-          // Use first available sub-agent
-          const agent = db.prepare(
-            "SELECT id FROM agents WHERE type = 'sub' AND user_id = ? LIMIT 1"
-          ).get(ctx.userId || '') as any;
-          if (!agent) return { error: 'No sub-agent available' };
-          targetAgentId = agent.id as string;
-        }
-
-        const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(targetAgentId) as any;
-        if (!agent) return { error: `Sub-agent not found: ${targetAgentId}` };
-
-        const result = await subAgentManager.delegate(
-          ctx.agentId || '',
-          targetAgentId,
-          task,
-          ctx.userId || '',
-          '',
-          ''
-        );
-        return { result, agentId: targetAgentId };
-      } catch (error: any) {
-        return { error: error.message };
-      }
-    },
-  },
 ];
 
 // 13. install_package (bonus tool for sandbox)

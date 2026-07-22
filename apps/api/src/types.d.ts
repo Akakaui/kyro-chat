@@ -1,3 +1,18 @@
+declare module 'pg' {
+  class Pool {
+    constructor(config?: Record<string, unknown>);
+    query(text: string, params?: unknown[]): Promise<{ rows: any[]; rowCount: number | null }>;
+    end(): Promise<void>;
+    on(event: string, listener: (...args: unknown[]) => void): this;
+  }
+  class Client {
+    constructor(config?: Record<string, unknown>);
+    query(text: string, params?: unknown[]): Promise<{ rows: any[]; rowCount: number | null }>;
+    end(): Promise<void>;
+  }
+  export { Pool, Client };
+}
+
 declare module 'dockerode' {
   interface ContainerOptions {
     Image?: string;
@@ -56,43 +71,61 @@ declare module 'dockerode' {
 }
 
 declare module 'e2b' {
-  interface SandboxOptions {
-    template?: string;
-    metadata?: Record<string, string>;
-    timeout?: number;
+  interface ConnectionOpts {
+    apiKey?: string;
+    domain?: string;
+    requestTimeoutMs?: number;
+    headers?: Record<string, string>;
   }
 
-  interface CodeExecutionResult {
-    logs?: {
-      stdout?: string[];
-      stderr?: string[];
-    };
-    error?: {
-      name: string;
-      value: string;
-      traceback: string;
-    };
-    results?: any[];
+  interface SandboxOpts extends ConnectionOpts {
+    template?: string;
+    metadata?: Record<string, string>;
+    timeoutMs?: number;
+    envs?: Record<string, string>;
+  }
+
+  interface CommandResult {
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    error?: string;
+  }
+
+  interface CommandStartOpts {
+    cwd?: string;
+    envs?: Record<string, string>;
+    user?: string;
+    timeoutMs?: number;
+    background?: boolean;
+  }
+
+  interface FilesystemEntry {
+    name: string;
+    isDir: boolean;
+    size?: number;
+  }
+
+  interface Filesystem {
+    write(path: string, content: string): Promise<void>;
+    read(path: string): Promise<string>;
+    list(path: string): Promise<FilesystemEntry[]>;
+  }
+
+  interface Commands {
+    run(cmd: string, opts?: CommandStartOpts): Promise<CommandResult>;
   }
 
   class Sandbox {
-    static create(options?: SandboxOptions): Promise<Sandbox>;
-    keepAlive(seconds: number): Promise<void>;
-    runCode(code: string, options?: { language?: string; timeout?: number }): Promise<CodeExecutionResult>;
-    kill(): Promise<void>;
-    id: string;
-    getFileSystem(): Promise<any>;
-    getPath(path: string): any;
-    commands: {
-      run(command: string, options?: { cwd?: string; env?: Record<string, string> }): Promise<{
-        stdout: string;
-        stderr: string;
-        exitCode: number;
-      }>;
-    };
+    static create(opts?: SandboxOpts): Promise<Sandbox>;
+    static create<S extends typeof Sandbox>(this: S, template: string, opts?: SandboxOpts): Promise<InstanceType<S>>;
+    readonly files: Filesystem;
+    readonly commands: Commands;
+    readonly sandboxId: string;
+    kill(): Promise<boolean>;
   }
 
-  export { Sandbox, SandboxOptions, CodeExecutionResult };
+  export { Sandbox, SandboxOpts, CommandResult };
 }
 
 declare module 'better-sqlite3' {

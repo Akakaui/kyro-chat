@@ -11,12 +11,12 @@
     "dev:api": "npm run dev --workspace=apps/api",
     "build": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
     "db:init": "npm run db:init --workspace=apps/api",
+    "db:migrate": "ts-node apps/api/src/db/migrate.ts",
     "test": "npm run test:api && npm run test:web",
     "test:api": "npx vitest run --config apps/api/vitest.config.ts",
     "test:web": "npx vitest run --config apps/web/vitest.config.ts"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/dockerode": "^4.0.1",
     "@types/imap-simple": "^4.2.10",
     "@types/mailparser": "^3.4.6",
@@ -31,7 +31,9 @@
     "protobufjs@6.11.6": true,
     "protobufjs@7.6.5": true,
     "ssh2@1.17.0": true,
-    "better-sqlite3@11.10.0": true,
     "cpu-features@0.0.10": true
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
   }
 }

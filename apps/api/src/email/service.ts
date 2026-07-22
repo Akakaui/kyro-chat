@@ -373,6 +373,82 @@ class EmailService {
   }
 
   /**
+   * Fetch inbox emails (all, not just UNSEEN)
+   */
+  async fetchInbox(limit: number = 50): Promise<EmailMessage[]> {
+    if (!this.imapConnection) {
+      try {
+        await this.initializeFromStored(this.userId);
+      } catch {
+        return [];
+      }
+    }
+
+    try {
+      const searchCriteria = ['ALL'];
+      const fetchOptions = {
+        bodies: ['HEADER', 'TEXT'],
+        markSeen: false,
+        struct: true,
+      };
+
+      const messages = await this.imapConnection.search(searchCriteria, fetchOptions);
+      const emails: EmailMessage[] = [];
+
+      for (const message of messages.slice(-limit).reverse()) {
+        const all = message.parts.find((part: any) => part.which === 'TEXT');
+        const header = message.parts.find((part: any) => part.which === 'HEADER');
+
+        if (header && all) {
+          const parsed = await simpleParser(all.body);
+
+          emails.push({
+            id: message.attributes.uid.toString(),
+            from: parsed.from?.text || '',
+            to: parsed.to?.text || '',
+            subject: parsed.subject || '(no subject)',
+            text: parsed.text || '',
+            html: parsed.html?.toString(),
+            date: parsed.date || new Date(),
+            isRead: message.attributes.flags?.includes('\\Seen') || false,
+          });
+        }
+      }
+
+      return emails;
+    } catch (error) {
+      console.error('Error fetching inbox:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Mark email as read
+   */
+  async markAsRead(uid: string): Promise<void> {
+    if (!this.imapConnection) return;
+
+    try {
+      await this.imapConnection.addFlags(uid, ['\\Seen']);
+    } catch (error) {
+      console.error('Error marking email as read:', error);
+    }
+  }
+
+  /**
+   * Mark email as unread
+   */
+  async markAsUnread(uid: string): Promise<void> {
+    if (!this.imapConnection) return;
+
+    try {
+      await this.imapConnection.delFlags(uid, ['\\Seen']);
+    } catch (error) {
+      console.error('Error marking email as unread:', error);
+    }
+  }
+
+  /**
    * Disconnect
    */
   async disconnect(): Promise<void> {

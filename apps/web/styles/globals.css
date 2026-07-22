@@ -161,6 +161,22 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 16px);
 }
 
+/* Safe area inset for fixed bottom elements */
+.safe-area-inset-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+}
+
+/* Prevent text input zoom on iOS */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  input[type="password"],
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Skeleton shimmer */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

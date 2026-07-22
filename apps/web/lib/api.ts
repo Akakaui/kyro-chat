@@ -275,6 +275,52 @@ export async function listProjectKBs(projectId: string) {
   return request<{ kbs: KbSource[] }>(`/api/projects/${projectId}/kbs`)
 }
 
+// ─── Memory ───
+export interface MemoryEntry {
+  id: string
+  content: string
+  type: string
+  importance: number
+  agent_id?: string | null
+  metadata?: string
+  created_at: number
+  updated_at: number
+}
+
+export async function getMemoryToggle() {
+  return request<{ enabled: boolean }>("/api/memory/toggle")
+}
+
+export async function setMemoryToggle(enabled: boolean) {
+  return request<{ enabled: boolean }>("/api/memory/toggle", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+export async function listRecentMemories(limit?: number, agentId?: string) {
+  const params = new URLSearchParams()
+  if (limit) params.set("limit", String(limit))
+  if (agentId) params.set("agentId", agentId)
+  const qs = params.toString()
+  return request<{ memories: MemoryEntry[] }>(`/api/memory/recent${qs ? `?${qs}` : ""}`)
+}
+
+export async function updateMemory(id: string, data: { content?: string; importance?: number; type?: string }) {
+  return request<{ success: boolean }>(`/api/memory/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteMemory(id: string) {
+  return request<{ success: boolean }>(`/api/memory/${id}`, { method: "DELETE" })
+}
+
+export async function wipeAllMemories() {
+  return request<{ deleted: number }>("/api/memory", { method: "DELETE" })
+}
+
 // ─── Agent KB Permissions ───
 
 export async function getAgentKBPermissions(agentId: string) {
@@ -627,16 +673,70 @@ export async function checkToolPermission(toolName: string, source?: string) {
   )
 }
 
+// Email
+export interface EmailMessage {
+  id: string
+  from: string
+  to: string
+  subject: string
+  text: string
+  html?: string
+  date: string
+  isRead: boolean
+}
+
+export async function fetchEmailInbox(limit?: number) {
+  const params = limit ? `?limit=${limit}` : ""
+  return request<{ emails: EmailMessage[] }>(`/api/email/inbox${params}`)
+}
+
+export async function markEmailAsRead(uid: string) {
+  return request<{ success: boolean }>(`/api/email/read/${uid}`, {
+    method: "PUT",
+  })
+}
+
+export async function markEmailAsUnread(uid: string) {
+  return request<{ success: boolean }>(`/api/email/unread/${uid}`, {
+    method: "PUT",
+  })
+}
+
+export async function configureEmail(smtp: { host: string; port: number; secure: boolean; user: string; password: string }, imap: { host: string; port: number; user: string; password: string; tls: boolean }) {
+  return request<{ success: boolean }>("/api/email/configure", {
+    method: "POST",
+    body: JSON.stringify({ smtp, imap }),
+  })
+}
+
+export async function startEmailPolling(interval?: number) {
+  return request<{ success: boolean }>("/api/email/poll/start", {
+    method: "POST",
+    body: JSON.stringify({ interval }),
+  })
+}
+
+export async function stopEmailPolling() {
+  return request<{ success: boolean }>("/api/email/poll/stop", {
+    method: "POST",
+  })
+}
+
+export async function getEmailLogs() {
+  return request<{ logs: any[] }>("/api/email/logs")
+}
+
 // Email Settings
 export async function getEmailSettings() {
   return request<{
-    agentEmail: string
-    userEmail: string
-    agentDisplayName: string
-    notifications: {
-      taskComplete: boolean
-      scheduledDone: boolean
-      actionRequired: boolean
+    settings: {
+      userEmail: string
+      agentDisplayName: string
+      notifications: {
+        taskComplete: boolean
+        scheduledDone: boolean
+        actionRequired: boolean
+      }
     }
   }>("/api/email/settings")
 }
@@ -720,4 +820,146 @@ export async function remixArtifact(artifactId: string) {
     `/api/artifacts/share/${artifactId}/remix`,
     { method: "POST" }
   )
+}
+
+// ─── RBAC ───
+
+export interface RBACRole {
+  id: string
+  name: string
+  description: string | null
+  is_system: boolean
+  created_at: number
+}
+
+export interface RBACPermissionCheck {
+  allowed: boolean
+  role: string | null
+  permission: string | null
+}
+
+export interface RBACUserRoles {
+  userId: string
+  roles: string[]
+  roleIds: string[]
+  hierarchy: string[]
+  isAdmin: boolean
+}
+
+/**
+ * Get all roles in the system.
+ * Requires admin privileges.
+ */
+export async function listRoles() {
+  return request<{ roles: RBACRole[] }>("/api/rbac/roles")
+}
+
+/**
+ * Get a specific role with its permissions.
+ */
+export async function getRole(id: string) {
+  return request<{ role: RBACRole; permissions: string[] }>(`/api/rbac/roles/${id}`)
+}
+
+/**
+ * Create a custom role.
+ * Requires admin privileges.
+ */
+export async function createRole(name: string, description?: string, permissions?: string[]) {
+  return request<{ role: RBACRole }>("/api/rbac/roles", {
+    method: "POST",
+    body: JSON.stringify({ name, description, permissions }),
+  })
+}
+
+/**
+ * Delete a custom role.
+ * Requires admin privileges.
+ */
+export async function deleteRole(id: string) {
+  return request<{ success: boolean }>(`/api/rbac/roles/${id}`, { method: "DELETE" })
+}
+
+/**
+ * Get a user's roles.
+ */
+export async function getUserRoles(userId: string) {
+  return request<RBACUserRoles>(`/api/rbac/users/${userId}/roles`)
+}
+
+/**
+ * Assign a role to a user.
+ * Requires admin privileges.
+ */
+export async function assignRole(userId: string, roleId: string, expiresAt?: number) {
+  return request<{ success: boolean; message: string }>("/api/rbac/assign", {
+    method: "POST",
+    body: JSON.stringify({ userId, roleId, expiresAt }),
+  })
+}
+
+/**
+ * Remove a role from a user.
+ * Requires admin privileges.
+ */
+export async function removeRole(userId: string, roleId: string) {
+  return request<{ success: boolean; message: string }>("/api/rbac/remove", {
+    method: "POST",
+    body: JSON.stringify({ userId, roleId }),
+  })
+}
+
+/**
+ * Check if a user has a specific permission.
+ */
+export async function checkPermission(userId: string, resource: string, action: string) {
+  return request<RBACPermissionCheck>("/api/rbac/check", {
+    method: "POST",
+    body: JSON.stringify({ userId, resource, action }),
+  })
+}
+
+/**
+ * Grant a permission to a role.
+ * Requires admin privileges.
+ */
+export async function grantPermission(roleId: string, permission: string) {
+  return request<{ success: boolean; message: string }>("/api/rbac/permissions/grant", {
+    method: "POST",
+    body: JSON.stringify({ roleId, permission }),
+  })
+}
+
+/**
+ * Revoke a permission from a role.
+ * Requires admin privileges.
+ */
+export async function revokePermission(roleId: string, permission: string) {
+  return request<{ success: boolean; message: string }>("/api/rbac/permissions/revoke", {
+    method: "POST",
+    body: JSON.stringify({ roleId, permission }),
+  })
+}
+
+/**
+ * Get all users with a specific role.
+ * Requires admin privileges.
+ */
+export async function getUsersByRole(roleId: string) {
+  return request<{ roleId: string; roleName: string | null; userIds: string[]; count: number }>(
+    `/api/rbac/users-by-role/${roleId}`
+  )
+}
+
+/**
+ * Get the current user's RBAC information.
+ */
+export async function getSelfRBAC() {
+  return request<{
+    userId: string
+    email: string
+    roles: string[]
+    roleIds: string[]
+    isAdmin: boolean
+  }>("/api/rbac/self")
 }

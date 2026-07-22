@@ -1,55 +1,48 @@
-version: '3.8'
-
 services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
-      target: runner
+      dockerfile: apps/api/Dockerfile
+      target: production
     ports:
       - "3001:3001"
+    env_file: .env.production
     environment:
-      - PORT=3001
-      - NODE_ENV=production
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - API_KEY_ENCRYPTION_KEY=${API_KEY_ENCRYPTION_KEY}
-      - E2B_API_KEY=${E2B_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASS=${SMTP_PASS}
-      - IMAP_HOST=${IMAP_HOST}
-      - IMAP_PORT=${IMAP_PORT}
-      - IMAP_USER=${IMAP_USER}
-      - IMAP_PASS=${IMAP_PASS}
-    volumes:
-      - api-data:/app/data
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      E2B_API_KEY: ${E2B_API_KEY}
+      SENTRY_DSN: ${SENTRY_DSN}
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     restart: unless-stopped
 
-  # Browser service (noVNC) - KasmWeb Chrome
-  browser:
-    image: kasmweb/chrome:1.15.0
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: production
     ports:
-      - "6901:6901"
-    environment:
-      - VNC_PASSWORD=${VNC_PASSWORD}
-      - KASM_DISABLE_AUTH=${KASM_DISABLE_AUTH:-0}
+      - "3000:3000"
+    env_file: .env.production
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
-
-volumes:
-  api-data:

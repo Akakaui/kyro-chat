@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { memoryService } from '../memory/service.js';
+import { getDb } from '../db/init.js';
 
 export const memoryRoutes = new Hono();
 
@@ -81,4 +82,52 @@ memoryRoutes.post('/cleanup', async (c) => {
 
   const deleted = memoryService.cleanup(user.id, maxAge);
   return c.json({ deleted });
+});
+
+// Toggle memory enabled/disabled
+memoryRoutes.put('/toggle', async (c) => {
+  const user = c.get('user');
+  const { enabled } = await c.req.json();
+
+  if (typeof enabled !== 'boolean') {
+    return c.json({ error: 'enabled must be a boolean' }, 400);
+  }
+
+  const db = getDb();
+  const settingId = crypto.randomUUID();
+  const value = enabled ? 'true' : 'false';
+
+  db.prepare(`
+    INSERT INTO user_settings (id, user_id, key, value)
+    VALUES (?, ?, 'memory_enabled', ?)
+    ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()
+  `).run(settingId, user.id, value);
+
+  return c.json({ enabled });
+});
+
+// Get memory toggle state
+memoryRoutes.get('/toggle', async (c) => {
+  const user = c.get('user');
+  const db = getDb();
+
+  const setting = db.prepare(`
+    SELECT value FROM user_settings WHERE user_id = ? AND key = 'memory_enabled'
+  `).get(user.id) as any;
+
+  // Default to enabled if no setting exists
+  const enabled = setting ? setting.value === 'true' : true;
+  return c.json({ enabled });
+});
+
+// Wipe all memories for user
+memoryRoutes.delete('/', async (c) => {
+  const user = c.get('user');
+  const db = getDb();
+
+  const result = db.prepare(`
+    DELETE FROM memory_entries WHERE user_id = ?
+  `).run(user.id);
+
+  return c.json({ deleted: result.changes });
 });

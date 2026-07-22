@@ -29,6 +29,7 @@ interface ChatMessageProps {
   isLast?: boolean
   onRegenerate?: (messageId: string) => void
   onUndo?: (messageId: string) => void
+  onCancelTool?: (taskId: string) => void
 }
 
 export function ChatMessage({
@@ -36,6 +37,7 @@ export function ChatMessage({
   isLast = false,
   onRegenerate,
   onUndo,
+  onCancelTool,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
   const { setActiveArtifact, setArtifactViewerOpen } = useChatStore()
@@ -242,6 +244,7 @@ export function ChatMessage({
                 source="builtin"
                 isLoading={!tool.output}
                 details={tool.output ? tool.output.slice(0, 200) : undefined}
+                onCancel={onCancelTool ? () => onCancelTool(tool.id) : undefined}
               />
             ))}
           </div>

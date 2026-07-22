@@ -113,7 +113,7 @@ export function getDefaultTools(agentType: 'primary' | 'sub' | 'both' = 'primary
     ];
     const extraTools = agentType === 'sub'
       ? []
-      : ['search_knowledge', 'browse_web', 'search_web', 'create_artifact', 'delegate_to_agent'];
+      : ['search_knowledge', 'browse_web', 'search_web', 'create_artifact'];
     return [...sandboxTools, ...extraTools];
   }
 

@@ -6,7 +6,7 @@ export const projectRoutes = new Hono();
 // Create project
 projectRoutes.post('/', async (c) => {
   const user = c.get('user');
-  const { name, description } = await c.req.json();
+  const { name, description, customInstructions } = await c.req.json();
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return c.json({ error: 'Project name is required' }, 400);
@@ -16,11 +16,11 @@ projectRoutes.post('/', async (c) => {
   const db = getDb();
 
   db.prepare(`
-    INSERT INTO projects (id, name, description, user_id)
-    VALUES (?, ?, ?, ?)
-  `).run(id, name.trim(), description || '', user.id);
+    INSERT INTO projects (id, name, description, custom_instructions, user_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, name.trim(), description || '', customInstructions || null, user.id);
 
-  return c.json({ id, name: name.trim(), description: description || '' });
+  return c.json({ id, name: name.trim(), description: description || '', customInstructions: customInstructions || null });
 });
 
 // List user's projects
@@ -61,7 +61,7 @@ projectRoutes.get('/:id', async (c) => {
 projectRoutes.put('/:id', async (c) => {
   const user = c.get('user');
   const projectId = c.req.param('id');
-  const { name, description } = await c.req.json();
+  const { name, description, customInstructions } = await c.req.json();
   const db = getDb();
 
   const existing = db.prepare(`
@@ -85,6 +85,10 @@ projectRoutes.put('/:id', async (c) => {
   if (description !== undefined) {
     updates.push('description = ?');
     values.push(description);
+  }
+  if (customInstructions !== undefined) {
+    updates.push('custom_instructions = ?');
+    values.push(customInstructions || null);
   }
 
   if (updates.length === 0) {
