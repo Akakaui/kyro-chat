@@ -72,7 +72,7 @@ artifactRoutes.post('/:id/share', async (c) => {
 
   // Store visibility preference
   const db = getDb();
-  db.prepare(`
+  await db.prepare(`
     UPDATE artifacts
     SET share_visibility = ?
     WHERE id = ? AND user_id = ?
@@ -115,7 +115,7 @@ artifactRoutes.post('/share/:hash/remix', async (c) => {
   const db = getDb();
   const conversationId = crypto.randomUUID();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO conversations (id, user_id, title, model)
     VALUES (?, ?, ?, ?)
   `).run(
@@ -138,7 +138,7 @@ artifactRoutes.post('/share/:hash/remix', async (c) => {
     'Please help me modify or improve this artifact. What changes would you like?',
   ].join('\n');
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO messages (id, conversation_id, role, content)
     VALUES (?, ?, 'user', ?)
   `).run(crypto.randomUUID(), conversationId, contextMessage);

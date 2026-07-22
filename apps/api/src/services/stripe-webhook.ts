@@ -61,7 +61,7 @@ export async function handleWebhook(payload: string, signature: string): Promise
   const eventId = event.id as string;
 
   // Idempotency check
-  const existing = db.prepare(`SELECT 1 FROM usage_tracking WHERE id = ?`).get(eventId);
+  const existing = await db.prepare(`SELECT 1 FROM usage_tracking WHERE id = ?`).get(eventId);
   if (existing) return { handled: true, type: eventType };
 
   switch (eventType) {
@@ -71,7 +71,7 @@ export async function handleWebhook(payload: string, signature: string): Promise
       const plan = session?.metadata?.plan || 'pro';
       if (!userId) break;
 
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO subscriptions (id, user_id, stripe_customer_id, stripe_subscription_id, plan, status, current_period_start, current_period_end, updated_at)
         VALUES (?, ?, ?, ?, ?, 'active', ?, ?, unixepoch())
         ON CONFLICT(user_id) DO UPDATE SET
@@ -98,7 +98,7 @@ export async function handleWebhook(payload: string, signature: string): Promise
         : sub.status === 'canceled' ? 'canceled'
         : 'active';
 
-      db.prepare(`
+      await db.prepare(`
         UPDATE subscriptions SET
           status = ?,
           current_period_start = ?,
@@ -113,7 +113,7 @@ export async function handleWebhook(payload: string, signature: string): Promise
       const sub = event.data?.object;
       if (!sub) break;
 
-      db.prepare(`
+      await db.prepare(`
         UPDATE subscriptions SET status = 'canceled', plan = 'free', updated_at = unixepoch()
         WHERE stripe_subscription_id = ?
       `).run(sub.id);
@@ -124,7 +124,7 @@ export async function handleWebhook(payload: string, signature: string): Promise
       const invoice = event.data?.object;
       if (!invoice?.subscription) break;
 
-      db.prepare(`
+      await db.prepare(`
         UPDATE subscriptions SET status = 'past_due', updated_at = unixepoch()
         WHERE stripe_subscription_id = ?
       `).run(invoice.subscription);

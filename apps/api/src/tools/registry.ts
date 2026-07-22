@@ -482,7 +482,7 @@ export function registerBuiltinTools(): void {
         const { subAgentManager } = await import('../agent/subagent.js');
         // Sub-agent delegation requires API key - pass from context
         const db = (await import('../db/init.js')).getDb();
-        const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
+        const agent = await db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
         if (!agent) return { error: `Sub-agent not found: ${agentId}` };
         const result = await subAgentManager.delegate(
           ctx.agentId, agentId, task,
@@ -615,7 +615,7 @@ export function registerBuiltinTools(): void {
 
         // Check permissions if agent_id is available
         if (ctx.agentId && kbId) {
-          const perm = db.prepare(`
+          const perm = await db.prepare(`
             SELECT permission FROM agent_kb_permissions
             WHERE agent_id = ? AND kb_id = ?
           `).get(ctx.agentId, kbId) as any;
@@ -649,7 +649,7 @@ export function registerBuiltinTools(): void {
           }
 
           case 'list': {
-            const sources = db.prepare(`
+            const sources = await db.prepare(`
               SELECT DISTINCT kb_id, source_file, COUNT(*) as chunk_count, MAX(created_at) as last_updated
               FROM kb_chunks
               WHERE user_id = ?
@@ -661,7 +661,7 @@ export function registerBuiltinTools(): void {
 
           case 'read': {
             if (!kbId) return { error: 'kb_id required for read action' };
-            const chunks = db.prepare(`
+            const chunks = await db.prepare(`
               SELECT content, source_file, metadata FROM kb_chunks
               WHERE kb_id = ? AND user_id = ?
               ORDER BY chunk_index ASC
@@ -700,8 +700,8 @@ export function registerBuiltinTools(): void {
           case 'delete': {
             if (!kbId) return { error: 'kb_id required for delete action' };
             const { deleteChunks } = await import('../kb/vector.js');
-            deleteChunks(kbId);
-            db.prepare('DELETE FROM kb_chunks WHERE kb_id = ? AND user_id = ?').run(kbId, ctx.userId || '');
+            await deleteChunks(kbId);
+            await db.prepare('DELETE FROM kb_chunks WHERE kb_id = ? AND user_id = ?').run(kbId, ctx.userId || '');
             return { success: true, deleted: kbId };
           }
 

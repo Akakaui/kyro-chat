@@ -79,7 +79,7 @@ keysRoutes.post('/', async (c) => {
   }
 
   const db = getDb();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO api_keys (id, user_id, provider, name, encrypted_key)
     VALUES (?, ?, ?, ?, ?)
   `).run(id, user.id, provider, name || provider, encryptedKey);
@@ -101,7 +101,7 @@ keysRoutes.get('/', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT id, provider, name, encrypted_key, is_valid, created_at, last_used_at
     FROM api_keys WHERE user_id = ?
     ORDER BY created_at DESC
@@ -139,12 +139,12 @@ keysRoutes.delete('/:id', async (c) => {
   const keyId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM api_keys WHERE id = ? AND user_id = ?
   `).get(keyId, user.id) as any;
   if (!row) return c.json({ error: 'Key not found' }, 404);
 
-  db.prepare(`DELETE FROM api_keys WHERE id = ? AND user_id = ?`).run(keyId, user.id);
+  await db.prepare(`DELETE FROM api_keys WHERE id = ? AND user_id = ?`).run(keyId, user.id);
   return c.json({ success: true });
 });
 
@@ -154,7 +154,7 @@ keysRoutes.post('/:id/validate', async (c) => {
   const keyId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, provider, encrypted_key FROM api_keys WHERE id = ? AND user_id = ?
   `).get(keyId, user.id) as any;
   if (!row) return c.json({ error: 'Key not found' }, 404);
@@ -216,7 +216,7 @@ keysRoutes.post('/:id/validate', async (c) => {
   }
 
   // Update validity flag
-  db.prepare(`
+  await db.prepare(`
     UPDATE api_keys SET is_valid = ?, updated_at = unixepoch() WHERE id = ?
   `).run(valid ? 1 : 0, keyId);
 

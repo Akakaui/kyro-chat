@@ -30,7 +30,7 @@ class MemoryService {
     const db = getDb();
     const id = crypto.randomUUID();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO memory_entries (id, user_id, agent_id, type, content, metadata, importance)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -82,11 +82,11 @@ class MemoryService {
     sql += ` ORDER BY importance DESC, last_accessed_at DESC LIMIT ?`;
     params.push(limit);
 
-    const memories = db.prepare(sql).all(...params) as any[];
+    const memories = await db.prepare(sql).all(...params) as any[];
 
     // Update access count
     for (const memory of memories) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE memory_entries
         SET access_count = access_count + 1, last_accessed_at = unixepoch()
         WHERE id = ?
@@ -134,7 +134,7 @@ class MemoryService {
     sql += ` ORDER BY created_at DESC LIMIT ?`;
     params.push(limit);
 
-    const memories = db.prepare(sql).all(...params) as any[];
+    const memories = await db.prepare(sql).all(...params) as any[];
 
     return memories.map(m => ({
       id: m.id,
@@ -185,7 +185,7 @@ class MemoryService {
     updates: Partial<Pick<MemoryEntry, 'content' | 'importance' | 'type'>>
   ): boolean {
     const db = getDb();
-    const result = db.prepare(`
+    const result = await db.prepare(`
       UPDATE memory_entries
       SET content = COALESCE(?, content),
           importance = COALESCE(?, importance),
@@ -207,7 +207,7 @@ class MemoryService {
    */
   delete(id: string, userId: string): boolean {
     const db = getDb();
-    const result = db.prepare(`
+    const result = await db.prepare(`
       DELETE FROM memory_entries WHERE id = ? AND user_id = ?
     `).run(id, userId);
 
@@ -221,7 +221,7 @@ class MemoryService {
     const db = getDb();
     const cutoff = Math.floor((Date.now() - maxAge) / 1000);
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       DELETE FROM memory_entries
       WHERE user_id = ?
       AND importance < 3

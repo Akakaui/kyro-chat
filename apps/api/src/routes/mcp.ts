@@ -56,7 +56,7 @@ mcpRoutes.post('/connect', async (c) => {
   }
 
   // Persist connection record with full config
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO mcp_connections (
       id, user_id, name, url, auth_type, access_token, api_key, status,
       transport_mode, timeout, headers,
@@ -87,7 +87,7 @@ mcpRoutes.post('/connect', async (c) => {
     const tools = await mcpClient.connect(serverConfig);
 
     // Update status and cache tools
-    db.prepare(`
+    await db.prepare(`
       UPDATE mcp_connections
       SET status = 'connected', tools_json = ?, updated_at = unixepoch()
       WHERE id = ? AND user_id = ?
@@ -95,7 +95,7 @@ mcpRoutes.post('/connect', async (c) => {
 
     return c.json({ id, name: serverConfig.name, tools, status: 'connected' });
   } catch (err: any) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE mcp_connections SET status = 'error', updated_at = unixepoch()
       WHERE id = ? AND user_id = ?
     `).run(id, user.id);
@@ -109,7 +109,7 @@ mcpRoutes.get('/servers', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT id, name, url, auth_type, status, tools_json, created_at, updated_at,
            transport_mode, timeout, enabled
     FROM mcp_connections
@@ -142,7 +142,7 @@ mcpRoutes.get('/servers/:id/tools', async (c) => {
   const serverId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, status, tools_json FROM mcp_connections
     WHERE id = ? AND user_id = ?
   `).get(serverId, user.id) as any;
@@ -170,7 +170,7 @@ mcpRoutes.post('/servers/:id/tools/:toolName/call', async (c) => {
   const db = getDb();
 
   // Verify ownership
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM mcp_connections WHERE id = ? AND user_id = ?
   `).get(serverId, user.id) as any;
   if (!row) return c.json({ error: 'Not found' }, 404);
@@ -193,7 +193,7 @@ mcpRoutes.put('/servers/:id', async (c) => {
   const serverId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM mcp_connections WHERE id = ? AND user_id = ?
   `).get(serverId, user.id) as any;
   if (!row) return c.json({ error: 'Not found' }, 404);
@@ -234,7 +234,7 @@ mcpRoutes.put('/servers/:id', async (c) => {
   updates.push('updated_at = unixepoch()');
   values.push(serverId, user.id);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE mcp_connections SET ${updates.join(', ')} WHERE id = ? AND user_id = ?
   `).run(...values);
 
@@ -247,7 +247,7 @@ mcpRoutes.post('/servers/:id/import', async (c) => {
   const serverId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM mcp_connections WHERE id = ? AND user_id = ?
   `).get(serverId, user.id) as any;
   if (!row) return c.json({ error: 'Not found' }, 404);
@@ -299,7 +299,7 @@ mcpRoutes.post('/servers/:id/import', async (c) => {
   updates.push('updated_at = unixepoch()');
   values.push(serverId, user.id);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE mcp_connections SET ${updates.join(', ')} WHERE id = ? AND user_id = ?
   `).run(...values);
 
@@ -312,7 +312,7 @@ mcpRoutes.get('/servers/:id/export', async (c) => {
   const serverId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, name, url, auth_type, transport_mode, timeout, headers,
            oauth_client_id, oauth_scopes, oauth_redirect_uri, env_vars, config_json
     FROM mcp_connections WHERE id = ? AND user_id = ?
@@ -348,7 +348,7 @@ mcpRoutes.post('/servers/:id/test', async (c) => {
   const serverId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, url, name, auth_type, access_token, api_key
     FROM mcp_connections WHERE id = ? AND user_id = ?
   `).get(serverId, user.id) as any;
@@ -393,14 +393,14 @@ mcpRoutes.post('/servers/:id/disconnect', async (c) => {
   const serverId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM mcp_connections WHERE id = ? AND user_id = ?
   `).get(serverId, user.id) as any;
   if (!row) return c.json({ error: 'Not found' }, 404);
 
   await mcpClient.disconnect(serverId);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE mcp_connections SET status = 'disconnected', updated_at = unixepoch()
     WHERE id = ? AND user_id = ?
   `).run(serverId, user.id);
@@ -414,14 +414,14 @@ mcpRoutes.delete('/servers/:id', async (c) => {
   const serverId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM mcp_connections WHERE id = ? AND user_id = ?
   `).get(serverId, user.id) as any;
   if (!row) return c.json({ error: 'Not found' }, 404);
 
   await mcpClient.disconnect(serverId);
 
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM mcp_connections WHERE id = ? AND user_id = ?
   `).run(serverId, user.id);
 

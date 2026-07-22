@@ -28,7 +28,7 @@ skillRoutes.post('/', async (c) => {
   }
 
   const db = getDb();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO skills (id, user_id, name, description, content, triggers, variables, is_builtin)
     VALUES (?, ?, ?, ?, ?, ?, ?, 0)
   `).run(
@@ -49,7 +49,7 @@ skillRoutes.get('/', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const skills = db.prepare(`
+  const skills = await db.prepare(`
     SELECT id, name, description, is_builtin, triggers, created_at
     FROM skills WHERE user_id = ?
     ORDER BY created_at DESC
@@ -64,7 +64,7 @@ skillRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
   const db = getDb();
 
-  const skill = db.prepare(`
+  const skill = await db.prepare(`
     SELECT * FROM skills WHERE id = ? AND user_id = ?
   `).get(id, user.id) as any;
 
@@ -122,7 +122,7 @@ skillRoutes.put('/:id', async (c) => {
   }
 
   const db = getDb();
-  db.prepare(`
+  await db.prepare(`
     UPDATE skills
     SET name = ?, description = ?, content = ?, triggers = ?, variables = ?, updated_at = unixepoch()
     WHERE id = ? AND user_id = ? AND is_builtin = 0
@@ -145,7 +145,7 @@ skillRoutes.delete('/:id', async (c) => {
   const id = c.req.param('id');
   const db = getDb();
 
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM skills WHERE id = ? AND user_id = ? AND is_builtin = 0
   `).run(id, user.id);
   return c.json({ success: true });
@@ -157,7 +157,7 @@ skillRoutes.post('/match', async (c) => {
   const { message } = await c.req.json();
   const db = getDb();
 
-  const skills = db.prepare(`
+  const skills = await db.prepare(`
     SELECT * FROM skills WHERE user_id = ?
   `).all(user.id) as Skill[];
 
@@ -192,7 +192,7 @@ skillRoutes.get('/:id/export', async (c) => {
   const id = c.req.param('id');
   const db = getDb();
 
-  const skill = db.prepare(`
+  const skill = await db.prepare(`
     SELECT * FROM skills WHERE id = ? AND user_id = ?
   `).get(id, user.id) as any;
 

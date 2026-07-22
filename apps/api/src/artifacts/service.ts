@@ -94,7 +94,7 @@ class ArtifactService {
     const shareUrl = sandbox.getHost(SANDBOX_SERVE_PORT);
     const expiresAt = Date.now() + expiresInHours * 60 * 60 * 1000;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE artifacts
       SET sandbox_id = ?, share_url = ?, sandbox_expires_at = ?,
           updated_at = unixepoch()
@@ -124,7 +124,7 @@ class ArtifactService {
       // Already dead or not found
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE artifacts
       SET sandbox_id = NULL, share_url = NULL, sandbox_expires_at = NULL,
           updated_at = unixepoch()
@@ -146,7 +146,7 @@ class ArtifactService {
     const db = getDb();
     const id = crypto.randomUUID();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO artifacts (id, user_id, type, title, content, metadata)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(id, userId, type, title, content, JSON.stringify(metadata || {}));
@@ -168,7 +168,7 @@ class ArtifactService {
    */
   get(id: string, userId: string): Artifact | null {
     const db = getDb();
-    const artifact = db.prepare(`
+    const artifact = await db.prepare(`
       SELECT * FROM artifacts WHERE id = ? AND user_id = ?
     `).get(id, userId) as any;
 
@@ -196,7 +196,7 @@ class ArtifactService {
    */
   list(userId: string, limit: number = 50): Artifact[] {
     const db = getDb();
-    const artifacts = db.prepare(`
+    const artifacts = await db.prepare(`
       SELECT * FROM artifacts
       WHERE user_id = ?
       ORDER BY created_at DESC
@@ -229,7 +229,7 @@ class ArtifactService {
     updates: Partial<Pick<Artifact, 'title' | 'content' | 'metadata'>>
   ): boolean {
     const db = getDb();
-    const result = db.prepare(`
+    const result = await db.prepare(`
       UPDATE artifacts
       SET title = COALESCE(?, title),
           content = COALESCE(?, content),
@@ -252,7 +252,7 @@ class ArtifactService {
    */
   delete(id: string, userId: string): boolean {
     const db = getDb();
-    const result = db.prepare(`
+    const result = await db.prepare(`
       DELETE FROM artifacts WHERE id = ? AND user_id = ?
     `).run(id, userId);
 
@@ -279,7 +279,7 @@ class ArtifactService {
 
     const expiresAt = Date.now() + expiresInHours * 60 * 60 * 1000;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE artifacts
       SET share_hash = ?, share_expires_at = ?
       WHERE id = ? AND user_id = ?
@@ -296,7 +296,7 @@ class ArtifactService {
    */
   getByShareHash(hash: string): Artifact | null {
     const db = getDb();
-    const artifact = db.prepare(`
+    const artifact = await db.prepare(`
       SELECT * FROM artifacts
       WHERE share_hash = ?
       AND (share_expires_at IS NULL OR share_expires_at > ?)
@@ -326,7 +326,7 @@ class ArtifactService {
    */
   revokeShareLink(id: string, userId: string): boolean {
     const db = getDb();
-    const result = db.prepare(`
+    const result = await db.prepare(`
       UPDATE artifacts
       SET share_hash = NULL, share_expires_at = NULL
       WHERE id = ? AND user_id = ?

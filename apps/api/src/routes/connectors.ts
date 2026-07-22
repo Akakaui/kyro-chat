@@ -160,7 +160,7 @@ connectorRoutes.post('/', async (c) => {
     }
   }
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO custom_apis (id, name, image, api_key_encrypted, base_url, user_id)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(id, name, image || null, encryptedKey, baseUrl || null, user.id);
@@ -181,7 +181,7 @@ connectorRoutes.get('/', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT id, name, image, base_url, endpoints, status, created_at, updated_at
     FROM custom_apis
     WHERE user_id = ?
@@ -210,7 +210,7 @@ connectorRoutes.get('/:id', async (c) => {
   const connectorId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, name, image, base_url, endpoints, status, created_at, updated_at
     FROM custom_apis
     WHERE id = ? AND user_id = ?
@@ -239,7 +239,7 @@ connectorRoutes.put('/:id', async (c) => {
   const { name, image, baseUrl } = await c.req.json();
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM custom_apis WHERE id = ? AND user_id = ?
   `).get(connectorId, user.id) as any;
   if (!row) return c.json({ error: 'Not found' }, 404);
@@ -254,7 +254,7 @@ connectorRoutes.put('/:id', async (c) => {
   if (updates.length > 0) {
     updates.push('updated_at = unixepoch()');
     params.push(connectorId, user.id);
-    db.prepare(`UPDATE custom_apis SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
+    await db.prepare(`UPDATE custom_apis SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
   }
 
   return c.json({ success: true });
@@ -266,12 +266,12 @@ connectorRoutes.delete('/:id', async (c) => {
   const connectorId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id FROM custom_apis WHERE id = ? AND user_id = ?
   `).get(connectorId, user.id) as any;
   if (!row) return c.json({ error: 'Not found' }, 404);
 
-  db.prepare(`DELETE FROM custom_apis WHERE id = ? AND user_id = ?`).run(connectorId, user.id);
+  await db.prepare(`DELETE FROM custom_apis WHERE id = ? AND user_id = ?`).run(connectorId, user.id);
 
   return c.json({ success: true });
 });
@@ -282,7 +282,7 @@ connectorRoutes.post('/:id/discover', async (c) => {
   const connectorId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, base_url, api_key_encrypted
     FROM custom_apis
     WHERE id = ? AND user_id = ?
@@ -290,7 +290,7 @@ connectorRoutes.post('/:id/discover', async (c) => {
   if (!row) return c.json({ error: 'Not found' }, 404);
 
   // Set status to discovering
-  db.prepare(`UPDATE custom_apis SET status = 'discovering', updated_at = unixepoch() WHERE id = ?`).run(connectorId);
+  await db.prepare(`UPDATE custom_apis SET status = 'discovering', updated_at = unixepoch() WHERE id = ?`).run(connectorId);
 
   let apiKey = null;
   if (row.api_key_encrypted) {
@@ -303,14 +303,14 @@ connectorRoutes.post('/:id/discover', async (c) => {
 
   try {
     const endpoints = await discoverEndpoints(row.base_url, apiKey);
-    db.prepare(`
+    await db.prepare(`
       UPDATE custom_apis SET status = 'ready', endpoints = ?, updated_at = unixepoch()
       WHERE id = ?
     `).run(JSON.stringify(endpoints), connectorId);
 
     return c.json({ endpoints, status: 'ready' });
   } catch (err: any) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE custom_apis SET status = 'error', updated_at = unixepoch()
       WHERE id = ?
     `).run(connectorId);
@@ -325,7 +325,7 @@ connectorRoutes.get('/:id/tools', async (c) => {
   const connectorId = c.req.param('id');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT id, name, endpoints, status
     FROM custom_apis
     WHERE id = ? AND user_id = ?
@@ -351,7 +351,7 @@ connectorRoutes.get('/:id/tools', async (c) => {
 // ---------- Helper exported for permission checks ----------
 export async function getDecryptedApiKey(connectorId: string): Promise<string | null> {
   const db = getDb();
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT api_key_encrypted FROM custom_apis WHERE id = ?
   `).get(connectorId) as any;
   if (!row?.api_key_encrypted) return null;

@@ -105,7 +105,7 @@ class EmailService {
    */
   async initializeFromStored(userId: string): Promise<void> {
     const db = getDb();
-    const profile = db.prepare(`
+    const profile = await db.prepare(`
       SELECT email_config FROM user_profiles WHERE id = ?
     `).get(userId) as any;
 
@@ -135,7 +135,7 @@ class EmailService {
    */
   getSettings(userId: string): EmailSettings {
     const db = getDb();
-    const profile = db.prepare(`
+    const profile = await db.prepare(`
       SELECT email_address, agent_display_name, email_notifications
       FROM user_profiles WHERE id = ?
     `).get(userId) as any;
@@ -174,7 +174,7 @@ class EmailService {
 
     if (updates.length > 0) {
       values.push(userId);
-      db.prepare(`
+      await db.prepare(`
         UPDATE user_profiles SET ${updates.join(', ')} WHERE id = ?
       `).run(...values);
     }

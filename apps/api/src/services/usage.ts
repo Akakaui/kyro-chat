@@ -6,7 +6,7 @@ export function getUsage(userId: string) {
   const now = Math.floor(Date.now() / 1000);
   const dayStart = now - (now % 86400);
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT metric, SUM(count) as total
     FROM usage_tracking
     WHERE user_id = ? AND period_start >= ?
@@ -33,7 +33,7 @@ export function trackUsage(userId: string, metric: string, count: number = 1): v
   const dayStart = now - (now % 86400);
   const dayEnd = dayStart + 86400;
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO usage_tracking (id, user_id, metric, count, period_start, period_end)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT DO UPDATE SET count = count + excluded.count

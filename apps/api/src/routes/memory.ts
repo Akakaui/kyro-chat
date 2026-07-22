@@ -97,7 +97,7 @@ memoryRoutes.put('/toggle', async (c) => {
   const settingId = crypto.randomUUID();
   const value = enabled ? 'true' : 'false';
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO user_settings (id, user_id, key, value)
     VALUES (?, ?, 'memory_enabled', ?)
     ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()
@@ -111,7 +111,7 @@ memoryRoutes.get('/toggle', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const setting = db.prepare(`
+  const setting = await db.prepare(`
     SELECT value FROM user_settings WHERE user_id = ? AND key = 'memory_enabled'
   `).get(user.id) as any;
 
@@ -125,7 +125,7 @@ memoryRoutes.delete('/', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const result = db.prepare(`
+  const result = await db.prepare(`
     DELETE FROM memory_entries WHERE user_id = ?
   `).run(user.id);
 

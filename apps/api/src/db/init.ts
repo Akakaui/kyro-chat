@@ -2,24 +2,10 @@ import { Pool } from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '../../data/chatbot.db');
-
-let db: any;
 let pgPool: Pool | null = null;
 
-let usePostgreSQLCache: boolean | null = null;
-
-function usePostgreSQL(): boolean {
-  if (usePostgreSQLCache !== null) return usePostgreSQLCache;
-  usePostgreSQLCache = process.env.POSTGRES_URL !== undefined || 
-         process.env.POSTGRES_HOST !== undefined ||
-         process.env.USE_POSTGRES === 'true';
-  return usePostgreSQLCache;
-}
-
 function getPgPoolWrapper(): Pool {
-  if (!pgPool && usePostgreSQL()) {
+  if (!pgPool) {
     const poolConfig = {
       connectionString: process.env.POSTGRES_URL ||
         `postgresql://${process.env.POSTGRES_USER || 'postgres'}:${process.env.POSTGRES_PASSWORD || 'password'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'chatbot'}${process.env.POSTGRES_SSL === 'true' ? '?ssl=true' : ''}`,
@@ -34,43 +20,45 @@ function getPgPoolWrapper(): Pool {
       .then(() => console.log('✅ PostgreSQL connected successfully'))
       .catch((err: unknown) => {
         console.error('❌ PostgreSQL connection failed:', err);
-        console.log('⚠️  Falling back to SQLite');
-        pgPool = null;
+        process.exit(1);
       });
   }
-  
-  if (!pgPool) {
-    throw new Error('PostgreSQL pool not initialized. Set POSTGRES_URL or POSTGRES_HOST environment variables to use PostgreSQL');
-  }
-  
   return pgPool;
 }
 
-function getDb() {
-  if (usePostgreSQL()) {
-    return getPgPoolWrapper();
-  } else {
-    if (!db) {
-      try {
-        const Database = require('better-sqlite3');
-        db = new Database(DB_PATH);
-        db.pragma('journal_mode = WAL');
-        db.pragma('foreign_keys = ON');
-        console.log('💾 SQLite database initialized');
-      } catch (error) {
-        console.error('❌ Failed to initialize SQLite:', error);
-        throw error;
-      }
+export function getDb() {
+  const pool = getPgPoolWrapper();
+  return {
+    prepare: (sql: string) => {
+      // Convert SQLite ? to Postgres $1, $2, etc.
+      let i = 1;
+      const pgSql = sql.replace(/\?/g, () => `$${i++}`);
+      
+      return {
+        get: async (...args: any[]) => {
+          const res = await pool.query(pgSql, args);
+          return res.rows[0];
+        },
+        all: async (...args: any[]) => {
+          const res = await pool.query(pgSql, args);
+          return res.rows;
+        },
+        run: async (...args: any[]) => {
+          await pool.query(pgSql, args);
+          return { changes: 1 };
+        }
+      };
     }
-    return db;
-  }
+  };
 }
 
-async function initPgDb() {
+export async function initDb() {
   try {
     console.log('🐘 PostgreSQL database initialization starting...');
     const pool = getPgPoolWrapper();
-    console.log('✅ PostgreSQL connection established');
+
+    // Enable pgvector
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector;');
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS conversations (
@@ -78,8 +66,11 @@ async function initPgDb() {
         user_id TEXT NOT NULL,
         title TEXT,
         model TEXT,
+        project_id TEXT,
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
+        updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
+        starred INTEGER DEFAULT 0,
+        archived INTEGER DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS messages (
@@ -105,18 +96,29 @@ async function initPgDb() {
         max_tokens INTEGER DEFAULT 4096,
         skills TEXT,
         permissions TEXT,
+        is_sub_agent INTEGER DEFAULT 0,
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
         updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
       );
 
+      CREATE TABLE IF NOT EXISTS knowledge_bases (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
+      );
+
       CREATE TABLE IF NOT EXISTS kb_chunks (
         id TEXT PRIMARY KEY,
+        kb_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
         agent_id TEXT,
         source_file TEXT,
         content TEXT NOT NULL,
-        embedding BYTEA,
+        embedding vector(384),
         metadata TEXT,
+        chunk_index INTEGER,
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
       );
 
@@ -150,19 +152,16 @@ async function initPgDb() {
         user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
+        custom_instructions TEXT,
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
         updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
       );
 
-      CREATE TABLE IF NOT EXISTS sub_agent_chats (
-        id TEXT PRIMARY KEY,
+      CREATE TABLE IF NOT EXISTS user_settings (
         user_id TEXT NOT NULL,
-        agent_id TEXT NOT NULL,
-        model TEXT NOT NULL,
-        system_prompt TEXT,
-        conversation_id TEXT,
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        PRIMARY KEY (user_id, key)
       );
 
       CREATE TABLE IF NOT EXISTS mcp_connections (
@@ -179,6 +178,14 @@ async function initPgDb() {
         updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
       );
 
+      CREATE TABLE IF NOT EXISTS custom_apis (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        api_key_encrypted TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS sandbox_sessions (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -188,35 +195,24 @@ async function initPgDb() {
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
         exited_at INTEGER
       );
-
-      CREATE TABLE IF NOT EXISTS teams (
+      
+      CREATE TABLE IF NOT EXISTS browser_sessions (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
+        container_id TEXT NOT NULL,
+        vnc_port INTEGER,
+        status TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS api_keys (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        key TEXT NOT NULL,
+        name TEXT,
+        encrypted_key TEXT NOT NULL,
         provider TEXT NOT NULL,
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
         expires_at INTEGER,
         last_used INTEGER
-      );
-
-      CREATE TABLE IF NOT EXISTS subscriptions (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        provider TEXT NOT NULL CHECK(provider IN ('stripe', 'paypal')),
-        subscription_id TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('active', 'inactive', 'past_due', 'canceled')),
-        current_period_end INTEGER,
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
       );
 
       CREATE TABLE IF NOT EXISTS usage_tracking (
@@ -224,105 +220,54 @@ async function initPgDb() {
         user_id TEXT NOT NULL,
         feature TEXT NOT NULL,
         usage_count INTEGER DEFAULT 1,
-        period_start INTEGER NOT NULL,
-        period_end INTEGER NOT NULL,
+        date TEXT,
+        messages INTEGER DEFAULT 0,
+        tokens INTEGER DEFAULT 0,
+        tokens_used INTEGER DEFAULT 0,
+        browser_minutes INTEGER DEFAULT 0,
+        period_start INTEGER,
+        period_end INTEGER,
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
       );
 
-      CREATE TABLE IF NOT EXISTS emails (
+      CREATE TABLE IF NOT EXISTS memory_entries (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        body TEXT,
-        from_email TEXT NOT NULL,
-        to_email TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('sent', 'draft', 'archived')),
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        sent_at INTEGER
-      );
-
-      CREATE TABLE IF NOT EXISTS email_accounts (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        email TEXT NOT NULL,
-        provider TEXT NOT NULL CHECK(provider IN ('gmail', 'outlook', 'icloud')),
-        status TEXT NOT NULL CHECK(status IN ('active', 'inactive')),
-        access_token TEXT,
-        refresh_token TEXT,
-        expires_at INTEGER,
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
-      );
-
-      CREATE TABLE IF NOT EXISTS auth_attempts (
-        id TEXT PRIMARY KEY,
-        user_id TEXT,
-        ip_address TEXT,
-        user_agent TEXT,
-        attempt_time INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        success INTEGER NOT NULL CHECK(success IN (0, 1)),
-        failure_reason TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS memory (
-        id TEXT PRIMARY KEY,
-        conversation_id TEXT NOT NULL,
+        agent_id TEXT,
         content TEXT NOT NULL,
-        importance REAL DEFAULT 0.5,
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        embedding vector(384)
       );
 
-      -- RBAC tables
-      CREATE TABLE IF NOT EXISTS roles (
+      CREATE TABLE IF NOT EXISTS scheduled_tasks (
         id TEXT PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        description TEXT,
-        is_system BOOLEAN DEFAULT FALSE,
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
-      );
-
-      CREATE TABLE IF NOT EXISTS role_permissions (
-        role_id TEXT REFERENCES roles(id) ON DELETE CASCADE,
-        permission TEXT NOT NULL,
-        PRIMARY KEY (role_id, permission)
-      );
-
-      CREATE TABLE IF NOT EXISTS user_roles (
         user_id TEXT NOT NULL,
-        role_id TEXT REFERENCES roles(id) ON DELETE CASCADE,
-        assigned_by TEXT,
-        assigned_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        expires_at INTEGER,
-        PRIMARY KEY (user_id, role_id)
+        agent_id TEXT,
+        cron_expr TEXT,
+        last_run INTEGER
       );
 
-      CREATE TABLE IF NOT EXISTS audit_log (
+      CREATE TABLE IF NOT EXISTS permissions (
         id TEXT PRIMARY KEY,
-        user_id TEXT,
-        event_type TEXT NOT NULL,
-        category TEXT NOT NULL,
-        resource_type TEXT,
-        resource_id TEXT,
-        action TEXT,
-        details TEXT,
-        ip_address TEXT,
-        user_agent TEXT,
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
+        user_id TEXT NOT NULL,
+        agent_id TEXT,
+        tool_type TEXT,
+        granted INTEGER
       );
 
-      CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
-      CREATE INDEX IF NOT EXISTS idx_audit_log_event ON audit_log(event_type);
-      CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
-      CREATE INDEX IF NOT EXISTS idx_audit_log_category ON audit_log(category);
+      CREATE TABLE IF NOT EXISTS tool_permissions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        source TEXT,
+        permission TEXT,
+        UNIQUE(tool_name, source, user_id)
+      );
 
-      -- IP reputation tracking
-      CREATE TABLE IF NOT EXISTS ip_reputation (
-        ip_address TEXT PRIMARY KEY,
-        score INTEGER DEFAULT 0,
-        failed_attempts INTEGER DEFAULT 0,
-        blocked_until INTEGER,
-        last_seen INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
-        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
+      CREATE TABLE IF NOT EXISTS agent_kb_permissions (
+        kb_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        permission TEXT,
+        PRIMARY KEY (kb_id, agent_id)
       );
     `);
 
@@ -334,37 +279,10 @@ async function initPgDb() {
   }
 }
 
-export function initDb() {
-  if (usePostgreSQL()) {
-    console.log('🐘 PostgreSQL initialization requested');
-    return initPgDb().catch(err => {
-      console.error('❌ PostgreSQL initialization failed:', err);
-      console.log('⚠️  Falling back to SQLite');
-    });
-  } else {
-    console.log('💾 SQLite initialization (legacy mode)');
-    return Promise.resolve();
-  }
-}
-
-/**
- * Get the PostgreSQL connection pool.
- * Throws an error if PostgreSQL is not configured.
- */
 export function getPgPool(): Pool {
-  if (!usePostgreSQL()) {
-    throw new Error(
-      'PostgreSQL is not configured. Set POSTGRES_URL or POSTGRES_HOST environment variables.'
-    );
-  }
   return getPgPoolWrapper();
 }
 
-/**
- * Check if PostgreSQL is available and connected.
- */
 export function isPostgreSQLAvailable(): boolean {
-  return usePostgreSQL() && pgPool !== null;
+  return pgPool !== null;
 }
-
-export { getDb };

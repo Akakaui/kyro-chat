@@ -19,14 +19,14 @@ chatRoutes.post('/conversations', async (c) => {
   // Validate project if provided
   if (projectId) {
     const db = getDb();
-    const project = db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(projectId, user.id);
+    const project = await db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(projectId, user.id);
     if (!project) {
       return c.json({ error: 'Project not found' }, 404);
     }
   }
 
   const db = getDb();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO conversations (id, user_id, title, model, project_id)
     VALUES (?, ?, ?, ?, ?)
   `).run(id, user.id, title || 'New conversation', model || 'claude-sonnet-4-20250514', projectId || null);
@@ -54,7 +54,7 @@ chatRoutes.get('/conversations', async (c) => {
 
   query += ' ORDER BY updated_at DESC';
 
-  const conversations = db.prepare(query).all(...params);
+  const conversations = await db.prepare(query).all(...params);
 
   return c.json({ conversations });
 });
@@ -65,7 +65,7 @@ chatRoutes.get('/conversations/:id', async (c) => {
   const conversationId = c.req.param('id');
   const db = getDb();
 
-  const conversation = db.prepare(`
+  const conversation = await db.prepare(`
     SELECT * FROM conversations WHERE id = ? AND user_id = ?
   `).get(conversationId, user.id);
 
@@ -73,7 +73,7 @@ chatRoutes.get('/conversations/:id', async (c) => {
     return c.json({ error: 'Conversation not found' }, 404);
   }
 
-  const messages = db.prepare(`
+  const messages = await db.prepare(`
     SELECT * FROM messages
     WHERE conversation_id = ?
     ORDER BY created_at ASC
@@ -96,7 +96,7 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
   const db = getDb();
 
   // Verify conversation exists
-  const conversation = db.prepare(`
+  const conversation = await db.prepare(`
     SELECT * FROM conversations WHERE id = ? AND user_id = ?
   `).get(conversationId, user.id) as any;
 
@@ -108,14 +108,14 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
   let userMsgId: string | undefined;
   if (!incognito) {
     userMsgId = crypto.randomUUID();
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO messages (id, conversation_id, role, content, agent_id)
       VALUES (?, ?, 'user', ?, ?)
     `).run(userMsgId, conversationId, content, agentId || null);
   }
 
   // Get conversation history for context
-  const history = db.prepare(`
+  const history = await db.prepare(`
     SELECT role, content FROM messages
     WHERE conversation_id = ?
     ORDER BY created_at ASC
@@ -128,13 +128,13 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
   let pendingAskKBs: Array<{ kb_id: string; source_file: string }> = [];
 
   // Check global KB setting
-  const kbGlobalSetting = db.prepare(`
+  const kbGlobalSetting = await db.prepare(`
     SELECT value FROM user_settings WHERE user_id = ? AND key = 'kb_global_enabled'
   `).get(user.id) as any;
   const kbGlobalEnabled = kbGlobalSetting ? kbGlobalSetting.value === 'true' : true;
 
   if (agentId) {
-    agent = db.prepare(`
+    agent = await db.prepare(`
       SELECT * FROM agents WHERE id = ? AND user_id = ?
     `).get(agentId, user.id) as any;
     if (agent?.system_prompt) {
@@ -143,7 +143,7 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
 
     // Auto-inject project custom instructions into system prompt
     if (conversation.project_id) {
-      const project = db.prepare(`
+      const project = await db.prepare(`
         SELECT custom_instructions FROM projects WHERE id = ? AND user_id = ?
       `).get(conversation.project_id, user.id) as any;
       if (project?.custom_instructions) {
@@ -154,7 +154,7 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
     // Gather KB permissions and auto-inject "allow" KB content
     // Only if global KB toggle is enabled
     if (kbGlobalEnabled) {
-      const kbPerms = db.prepare(`
+      const kbPerms = await db.prepare(`
         SELECT akp.kb_id, akp.permission, kbs.source_file
         FROM agent_kb_permissions akp
         LEFT JOIN (
@@ -337,13 +337,13 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
             savedResponse = savedResponse.slice(0, idx);
           }
         }
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO messages (id, conversation_id, role, content, agent_id)
           VALUES (?, ?, 'assistant', ?, ?)
         `).run(assistantMsgId, conversationId, savedResponse, agentId || null);
 
         // Update conversation timestamp
-        db.prepare(`
+        await db.prepare(`
           UPDATE conversations SET updated_at = strftime('%s', 'now') WHERE id = ?
         `).run(conversationId);
       }
@@ -383,7 +383,7 @@ chatRoutes.patch('/conversations/:id', async (c) => {
   const { title, starred, archived } = await c.req.json();
   const db = getDb();
 
-  const conv = db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?').get(id, user.id);
+  const conv = await db.prepare('SELECT id FROM conversations WHERE id = ? AND user_id = ?').get(id, user.id);
   if (!conv) return c.json({ error: 'Not found' }, 404);
 
   const sets: string[] = [];
@@ -395,7 +395,7 @@ chatRoutes.patch('/conversations/:id', async (c) => {
 
   sets.push("updated_at = strftime('%s', 'now')");
   vals.push(id, user.id);
-  db.prepare(`UPDATE conversations SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...vals);
+  await db.prepare(`UPDATE conversations SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...vals);
   return c.json({ success: true });
 });
 
@@ -413,7 +413,7 @@ chatRoutes.post('/permission-response', async (c) => {
   if (remember) {
     const source = 'builtin';
     const perm = decision === 'allow' ? 'allow' : 'deny';
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO tool_permissions (id, tool_name, source, permission, user_id)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(tool_name, source, user_id) DO UPDATE SET permission = ?
@@ -451,7 +451,7 @@ chatRoutes.delete('/conversations/:id', async (c) => {
   const conversationId = c.req.param('id');
   const db = getDb();
 
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM conversations WHERE id = ? AND user_id = ?
   `).run(conversationId, user.id);
 

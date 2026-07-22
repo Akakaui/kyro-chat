@@ -40,7 +40,7 @@ class SchedulerService {
     const db = getDb();
     const id = crypto.randomUUID();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO scheduled_tasks (
         id, user_id, agent_id, name, description, type,
         cron_expression, scheduled_at, payload,
@@ -71,7 +71,7 @@ class SchedulerService {
    */
   get(id: string, userId: string): ScheduledTask | null {
     const db = getDb();
-    const task = db.prepare(`
+    const task = await db.prepare(`
       SELECT * FROM scheduled_tasks WHERE id = ? AND user_id = ?
     `).get(id, userId) as any;
 
@@ -84,7 +84,7 @@ class SchedulerService {
    */
   list(userId: string): ScheduledTask[] {
     const db = getDb();
-    const tasks = db.prepare(`
+    const tasks = await db.prepare(`
       SELECT * FROM scheduled_tasks
       WHERE user_id = ?
       ORDER BY created_at DESC
@@ -98,7 +98,7 @@ class SchedulerService {
    */
   listByProject(userId: string, projectId: string): ScheduledTask[] {
     const db = getDb();
-    const tasks = db.prepare(`
+    const tasks = await db.prepare(`
       SELECT * FROM scheduled_tasks
       WHERE user_id = ? AND project_id = ?
       ORDER BY created_at DESC
@@ -158,7 +158,7 @@ class SchedulerService {
     if (fields.length === 0) return false;
 
     values.push(id, userId);
-    db.prepare(`
+    await db.prepare(`
       UPDATE scheduled_tasks SET ${fields.join(', ')} WHERE id = ? AND user_id = ?
     `).run(...values);
 
@@ -176,7 +176,7 @@ class SchedulerService {
    */
   cancel(id: string, userId: string): boolean {
     const db = getDb();
-    const result = db.prepare(`
+    const result = await db.prepare(`
       UPDATE scheduled_tasks
       SET status = 'cancelled'
       WHERE id = ? AND user_id = ?
@@ -198,7 +198,7 @@ class SchedulerService {
     this.cancel(id, userId);
 
     const db = getDb();
-    const result = db.prepare(`
+    const result = await db.prepare(`
       DELETE FROM scheduled_tasks WHERE id = ? AND user_id = ?
     `).run(id, userId);
 
@@ -210,7 +210,7 @@ class SchedulerService {
    */
   async execute(id: string): Promise<void> {
     const db = getDb();
-    const task = db.prepare(`
+    const task = await db.prepare(`
       SELECT * FROM scheduled_tasks WHERE id = ?
     `).get(id) as any;
 
@@ -219,7 +219,7 @@ class SchedulerService {
     const parsed = this.parseTask(task);
 
     // Update status
-    db.prepare(`
+    await db.prepare(`
       UPDATE scheduled_tasks SET status = 'running' WHERE id = ?
     `).run(id);
 
@@ -242,7 +242,7 @@ class SchedulerService {
       }
 
       // Update status with result
-      db.prepare(`
+      await db.prepare(`
         UPDATE scheduled_tasks
         SET status = 'completed', last_run_at = unixepoch(), result = ?
         WHERE id = ?
@@ -257,7 +257,7 @@ class SchedulerService {
         }
       }
     } catch (error: any) {
-      db.prepare(`
+      await db.prepare(`
         UPDATE scheduled_tasks
         SET status = 'failed', result = ?
         WHERE id = ?
@@ -274,7 +274,7 @@ class SchedulerService {
     this.isRunning = true;
 
     const db = getDb();
-    const tasks = db.prepare(`
+    const tasks = await db.prepare(`
       SELECT id FROM scheduled_tasks
       WHERE status IN ('pending', 'running') AND type = 'recurring'
     `).all() as { id: string }[];
@@ -342,11 +342,11 @@ class SchedulerService {
 
     // Resolve agent
     const agent = task.agentId
-      ? db.prepare('SELECT * FROM agents WHERE id = ?').get(task.agentId) as Agent | undefined
+      ? await db.prepare('SELECT * FROM agents WHERE id = ?').get(task.agentId) as Agent | undefined
       : undefined;
 
     // Resolve API key from user's stored keys or env
-    const userKey = db.prepare(
+    const userKey = await db.prepare(
       'SELECT encrypted_key, provider FROM api_keys WHERE user_id = ? ORDER BY created_at DESC LIMIT 1'
     ).get(task.userId) as { encrypted_key: string; provider: string } | undefined;
 

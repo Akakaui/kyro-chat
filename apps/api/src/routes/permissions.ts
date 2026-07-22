@@ -9,7 +9,7 @@ permissionRoutes.get('/', async (c) => {
   const db = getDb();
 
   // Get global defaults
-  const globals = db.prepare(`
+  const globals = await db.prepare(`
     SELECT source_type, permission FROM tool_permission_globals
     WHERE user_id = ?
   `).all(user.id) as Array<{ source_type: string; permission: string }>;
@@ -24,7 +24,7 @@ permissionRoutes.get('/', async (c) => {
   }
 
   // Get per-tool overrides
-  const tools = db.prepare(`
+  const tools = await db.prepare(`
     SELECT tool_name, source, permission FROM tool_permissions
     WHERE user_id = ?
     ORDER BY source, tool_name
@@ -55,7 +55,7 @@ permissionRoutes.put('/globals', async (c) => {
   const db = getDb();
   const id = crypto.randomUUID();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO tool_permission_globals (id, source_type, permission, user_id)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(source_type, user_id) DO UPDATE SET permission = excluded.permission
@@ -70,7 +70,7 @@ permissionRoutes.get('/:toolName', async (c) => {
   const toolName = c.req.param('toolName');
   const db = getDb();
 
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT tool_name, source, permission FROM tool_permissions
     WHERE tool_name = ? AND user_id = ?
   `).get(toolName, user.id) as any;
@@ -103,7 +103,7 @@ permissionRoutes.put('/:toolName', async (c) => {
   const db = getDb();
   const id = crypto.randomUUID();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO tool_permissions (id, tool_name, source, permission, user_id)
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(tool_name, source, user_id) DO UPDATE SET permission = excluded.permission
@@ -118,7 +118,7 @@ permissionRoutes.delete('/:toolName', async (c) => {
   const toolName = c.req.param('toolName');
   const db = getDb();
 
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM tool_permissions WHERE tool_name = ? AND user_id = ?
   `).run(toolName, user.id);
 
@@ -133,7 +133,7 @@ permissionRoutes.get('/:toolName/check', async (c) => {
   const db = getDb();
 
   // Check per-tool override first
-  const toolRow = db.prepare(`
+  const toolRow = await db.prepare(`
     SELECT permission FROM tool_permissions
     WHERE tool_name = ? AND source = ? AND user_id = ?
   `).get(toolName, source || 'builtin', user.id) as any;
@@ -143,7 +143,7 @@ permissionRoutes.get('/:toolName/check', async (c) => {
   }
 
   // Fall back to global default
-  const globalRow = db.prepare(`
+  const globalRow = await db.prepare(`
     SELECT permission FROM tool_permission_globals
     WHERE source_type = ? AND user_id = ?
   `).get(source || 'builtin', user.id) as any;

@@ -93,7 +93,7 @@ emailRoutes.post('/configure', async (c) => {
     const db = getDb();
     const emailConfigJson = JSON.stringify({ smtp, imap });
     const encryptedConfig = await encryptApiKey(emailConfigJson);
-    db.prepare(`
+    await db.prepare(`
       UPDATE user_profiles
       SET email_config = ?
       WHERE id = ?
@@ -118,7 +118,7 @@ emailRoutes.post('/send', async (c) => {
     const result = await emailService.sendEmail(to, subject, text, html, agentId);
 
     const db = getDb();
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO email_logs (id, user_id, to_address, subject, status)
       VALUES (?, ?, ?, ?, 'sent')
     `).run(crypto.randomUUID(), user.id, to, subject);
@@ -191,7 +191,7 @@ emailRoutes.get('/logs', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const logs = db.prepare(`
+  const logs = await db.prepare(`
     SELECT * FROM email_logs
     WHERE user_id = ?
     ORDER BY created_at DESC

@@ -15,7 +15,7 @@ export class SubAgentManager {
   ): Promise<string> {
     const db = getDb();
 
-    const childAgent = db.prepare(`
+    const childAgent = await db.prepare(`
       SELECT * FROM agents WHERE id = ?
     `).get(childAgentId) as Agent | undefined;
 
@@ -71,7 +71,7 @@ export class SubAgentManager {
   ): Promise<AsyncGenerator<string>> {
     const db = getDb();
 
-    const childAgent = db.prepare(`
+    const childAgent = await db.prepare(`
       SELECT * FROM agents WHERE id = ?
     `).get(childAgentId) as Agent | undefined;
 

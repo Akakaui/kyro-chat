@@ -125,7 +125,7 @@ export async function generateImage(
   const db = getDb();
 
   // Find user's BYOK key with image gen support
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT id, provider, encrypted_key FROM api_keys
     WHERE user_id = ? AND is_valid = 1
     ORDER BY created_at ASC
@@ -162,7 +162,7 @@ export async function generateImage(
 
   // Store in DB
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO generated_images (id, user_id, conversation_id, message_id, provider, model, prompt, url, size, revised_prompt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -184,7 +184,7 @@ export async function generateImage(
 // ── Get a generated image by ID ──
 export function getImageById(imageId: string, userId: string): any | null {
   const db = getDb();
-  return db.prepare(`
+  return await db.prepare(`
     SELECT id, user_id, provider, model, prompt, url, size, revised_prompt, created_at
     FROM generated_images WHERE id = ? AND user_id = ?
   `).get(imageId, userId) || null;

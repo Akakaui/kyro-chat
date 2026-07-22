@@ -15,7 +15,7 @@ projectRoutes.post('/', async (c) => {
   const id = crypto.randomUUID();
   const db = getDb();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO projects (id, name, description, custom_instructions, user_id)
     VALUES (?, ?, ?, ?, ?)
   `).run(id, name.trim(), description || '', customInstructions || null, user.id);
@@ -28,7 +28,7 @@ projectRoutes.get('/', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const projects = db.prepare(`
+  const projects = await db.prepare(`
     SELECT p.id, p.name, p.description, p.created_at, p.updated_at,
       (SELECT COUNT(*) FROM conversations WHERE project_id = p.id) as conversation_count,
       (SELECT COUNT(*) FROM kb_chunks WHERE project_id = p.id GROUP BY kb_id) as kb_count
@@ -46,7 +46,7 @@ projectRoutes.get('/:id', async (c) => {
   const projectId = c.req.param('id');
   const db = getDb();
 
-  const project = db.prepare(`
+  const project = await db.prepare(`
     SELECT * FROM projects WHERE id = ? AND user_id = ?
   `).get(projectId, user.id);
 
@@ -64,7 +64,7 @@ projectRoutes.put('/:id', async (c) => {
   const { name, description, customInstructions } = await c.req.json();
   const db = getDb();
 
-  const existing = db.prepare(`
+  const existing = await db.prepare(`
     SELECT id FROM projects WHERE id = ? AND user_id = ?
   `).get(projectId, user.id);
 
@@ -98,7 +98,7 @@ projectRoutes.put('/:id', async (c) => {
   updates.push('updated_at = unixepoch()');
   values.push(projectId, user.id);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE projects SET ${updates.join(', ')} WHERE id = ? AND user_id = ?
   `).run(...values);
 
@@ -111,7 +111,7 @@ projectRoutes.delete('/:id', async (c) => {
   const projectId = c.req.param('id');
   const db = getDb();
 
-  const existing = db.prepare(`
+  const existing = await db.prepare(`
     SELECT id FROM projects WHERE id = ? AND user_id = ?
   `).get(projectId, user.id);
 
@@ -120,10 +120,10 @@ projectRoutes.delete('/:id', async (c) => {
   }
 
   // Clear project_id references before deleting
-  db.prepare(`UPDATE conversations SET project_id = NULL WHERE project_id = ?`).run(projectId);
-  db.prepare(`UPDATE kb_chunks SET project_id = NULL WHERE project_id = ?`).run(projectId);
+  await db.prepare(`UPDATE conversations SET project_id = NULL WHERE project_id = ?`).run(projectId);
+  await db.prepare(`UPDATE kb_chunks SET project_id = NULL WHERE project_id = ?`).run(projectId);
 
-  db.prepare(`DELETE FROM projects WHERE id = ? AND user_id = ?`).run(projectId, user.id);
+  await db.prepare(`DELETE FROM projects WHERE id = ? AND user_id = ?`).run(projectId, user.id);
 
   return c.json({ success: true });
 });
@@ -134,7 +134,7 @@ projectRoutes.get('/:id/conversations', async (c) => {
   const projectId = c.req.param('id');
   const db = getDb();
 
-  const project = db.prepare(`
+  const project = await db.prepare(`
     SELECT id FROM projects WHERE id = ? AND user_id = ?
   `).get(projectId, user.id);
 
@@ -142,7 +142,7 @@ projectRoutes.get('/:id/conversations', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  const conversations = db.prepare(`
+  const conversations = await db.prepare(`
     SELECT id, title, model, created_at, updated_at
     FROM conversations
     WHERE project_id = ? AND user_id = ?
@@ -158,7 +158,7 @@ projectRoutes.get('/:id/kbs', async (c) => {
   const projectId = c.req.param('id');
   const db = getDb();
 
-  const project = db.prepare(`
+  const project = await db.prepare(`
     SELECT id FROM projects WHERE id = ? AND user_id = ?
   `).get(projectId, user.id);
 
@@ -166,7 +166,7 @@ projectRoutes.get('/:id/kbs', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  const kbs = db.prepare(`
+  const kbs = await db.prepare(`
     SELECT kb_id, source_file, COUNT(*) as chunk_count, MAX(created_at) as last_updated
     FROM kb_chunks
     WHERE project_id = ? AND user_id = ?

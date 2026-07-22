@@ -1,8 +1,8 @@
 import { getDb } from '../db/init.js';
-import { generateEmbedding, cosineSimilarity } from './embeddings.js';
+import { generateEmbedding } from './embeddings.js';
 
 /**
- * Store a document chunk with its embedding in sqlite-vec
+ * Store a document chunk with its embedding in pgvector
  */
 export async function storeChunk(
   kbId: string,
@@ -16,19 +16,19 @@ export async function storeChunk(
   // Generate embedding
   const embedding = await generateEmbedding(content);
 
-  // Convert Float32Array to Buffer for sqlite-vec
-  const embeddingBuffer = Buffer.from(embedding.buffer);
+  // Format for pgvector: '[1.1, 2.2, ...]'
+  const embeddingStr = JSON.stringify(Array.from(embedding));
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO kb_chunks (id, kb_id, chunk_index, content, embedding, metadata)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, kbId, chunkIndex, content, embeddingBuffer, JSON.stringify(metadata));
+    VALUES (?, ?, ?, ?, ?::vector, ?)
+  `).run(id, kbId, chunkIndex, content, embeddingStr, JSON.stringify(metadata));
 
   return id;
 }
 
 /**
- * Search for similar chunks using cosine similarity
+ * Search for similar chunks using pgvector cosine distance
  */
 export async function searchChunks(
   kbId: string,
@@ -45,66 +45,63 @@ export async function searchChunks(
 
   // Generate query embedding
   const queryEmbedding = await generateEmbedding(query);
+  const queryEmbeddingStr = JSON.stringify(Array.from(queryEmbedding));
 
-  // Get chunks, optionally scoped to user's knowledge base
-  const chunks = userId
-    ? db.prepare(`
-        SELECT kc.id, kc.content, kc.embedding, kc.metadata
+  // Perform vector search directly in PostgreSQL using <=> operator
+  let results;
+  
+  if (userId) {
+    results = await db.prepare(`
+        SELECT kc.id, kc.content, kc.metadata, 1 - (kc.embedding <=> ?::vector) as score
         FROM kb_chunks kc
         JOIN knowledge_bases kb ON kc.kb_id = kb.id
         WHERE kc.kb_id = ? AND kb.user_id = ?
-      `).all(kbId, userId) as Array<{
+        ORDER BY kc.embedding <=> ?::vector
+        LIMIT ?
+      `).all(queryEmbeddingStr, kbId, userId, queryEmbeddingStr, limit) as Array<{
         id: string;
         content: string;
-        embedding: Buffer;
-        metadata: string;
-      }>
-    : db.prepare(`
-        SELECT id, content, embedding, metadata
-        FROM kb_chunks
-        WHERE kb_id = ?
-      `).all(kbId) as Array<{
-        id: string;
-        content: string;
-        embedding: Buffer;
+        score: number;
         metadata: string;
       }>;
+  } else {
+    results = await db.prepare(`
+        SELECT id, content, metadata, 1 - (embedding <=> ?::vector) as score
+        FROM kb_chunks
+        WHERE kb_id = ?
+        ORDER BY embedding <=> ?::vector
+        LIMIT ?
+      `).all(queryEmbeddingStr, kbId, queryEmbeddingStr, limit) as Array<{
+        id: string;
+        content: string;
+        score: number;
+        metadata: string;
+      }>;
+  }
 
-  // Calculate similarity scores
-  const scoredChunks = chunks.map(chunk => {
-    // Convert Buffer back to Float32Array
-    const chunkEmbedding = new Float32Array(chunk.embedding.buffer);
-    const score = cosineSimilarity(queryEmbedding, chunkEmbedding);
-
-    return {
-      id: chunk.id,
-      content: chunk.content,
-      score,
-      metadata: JSON.parse(chunk.metadata || '{}'),
-    };
-  });
-
-  // Sort by score and return top results
-  return scoredChunks
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  return results.map(row => ({
+    id: row.id,
+    content: row.content,
+    score: Number(row.score),
+    metadata: JSON.parse(row.metadata || '{}')
+  }));
 }
 
 /**
  * Delete all chunks for a knowledge base
  */
-export function deleteChunks(kbId: string): void {
+export async function deleteChunks(kbId: string): Promise<void> {
   const db = getDb();
-  db.prepare('DELETE FROM kb_chunks WHERE kb_id = ?').run(kbId);
+  await db.prepare('DELETE FROM kb_chunks WHERE kb_id = ?').run(kbId);
 }
 
 /**
  * Get chunk count for a knowledge base
  */
-export function getChunkCount(kbId: string): number {
+export async function getChunkCount(kbId: string): Promise<number> {
   const db = getDb();
-  const result = db.prepare(`
+  const result = await db.prepare(`
     SELECT COUNT(*) as count FROM kb_chunks WHERE kb_id = ?
-  `).get(kbId) as { count: number };
-  return result.count;
+  `).get(kbId) as { count: string | number };
+  return Number(result.count);
 }

@@ -6,7 +6,7 @@ export const settingsRoutes = new Hono();
 // Helper to get or set a user setting
 function getSetting(userId: string, key: string): string | null {
   const db = getDb();
-  const row = db.prepare(`
+  const row = await db.prepare(`
     SELECT value FROM user_settings WHERE user_id = ? AND key = ?
   `).get(userId, key) as any;
   return row?.value ?? null;
@@ -15,7 +15,7 @@ function getSetting(userId: string, key: string): string | null {
 function setSetting(userId: string, key: string, value: string): void {
   const db = getDb();
   const id = crypto.randomUUID();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO user_settings (id, user_id, key, value)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()
@@ -27,7 +27,7 @@ settingsRoutes.get('/', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT key, value FROM user_settings WHERE user_id = ?
   `).all(user.id) as Array<{ key: string; value: string }>;
 

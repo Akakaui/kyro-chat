@@ -48,7 +48,7 @@ modelRoutes.get('/', async (c) => {
   const windowStart = getWindowStart();
 
   // Get user's API keys to determine which providers are available
-  const apiKeys = db.prepare(`
+  const apiKeys = await db.prepare(`
     SELECT provider, api_key FROM api_keys WHERE user_id = ?
   `).all(user.id) as Array<{ provider: string; api_key: string }>;
 
@@ -60,7 +60,7 @@ modelRoutes.get('/', async (c) => {
   if (process.env.GOOGLE_AI_API_KEY) availableProviders.add('google');
 
   // Get usage for current window
-  const usage = db.prepare(`
+  const usage = await db.prepare(`
     SELECT model_id, tokens_used FROM model_usage
     WHERE user_id = ? AND window_start = ?
   `).all(user.id, windowStart) as Array<{ model_id: string; tokens_used: number }>;
@@ -119,17 +119,17 @@ modelRoutes.post('/usage', async (c) => {
   const id = crypto.randomUUID();
 
   // Check if usage record exists for this window
-  const existing = db.prepare(`
+  const existing = await db.prepare(`
     SELECT id, tokens_used FROM model_usage
     WHERE user_id = ? AND model_id = ? AND window_start = ?
   `).get(user.id, modelId, windowStart) as { id: string; tokens_used: number } | undefined;
 
   if (existing) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE model_usage SET tokens_used = ? WHERE id = ?
     `).run(existing.tokens_used + tokensUsed, existing.id);
   } else {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO model_usage (id, user_id, model_id, provider, tokens_used, tokens_limit, window_start, window_end)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, user.id, modelId, provider, tokensUsed, MODEL_REGISTRY.find(m => m.id === modelId)?.limit || 100000, windowStart, windowEnd);
@@ -151,14 +151,14 @@ modelRoutes.get('/:modelId/check', async (c) => {
   }
 
   // Check API key
-  const apiKey = db.prepare(`
+  const apiKey = await db.prepare(`
     SELECT api_key FROM api_keys WHERE user_id = ? AND provider = ?
   `).get(user.id, model.provider) as { api_key: string } | undefined;
 
   const hasKey = !!apiKey || !!process.env[`${model.provider.toUpperCase()}_API_KEY`];
 
   // Check usage
-  const usage = db.prepare(`
+  const usage = await db.prepare(`
     SELECT tokens_used FROM model_usage
     WHERE user_id = ? AND model_id = ? AND window_start = ?
   `).get(user.id, modelId, windowStart) as { tokens_used: number } | undefined;
@@ -185,7 +185,7 @@ modelRoutes.get('/usage/stats', async (c) => {
   const db = getDb();
   const windowStart = getWindowStart();
 
-  const usage = db.prepare(`
+  const usage = await db.prepare(`
     SELECT model_id, provider, tokens_used, tokens_limit, window_start
     FROM model_usage
     WHERE user_id = ? AND window_start = ?

@@ -25,7 +25,7 @@ kbRoutes.post('/upload', async (c) => {
   // Validate project exists if provided
   if (projectId) {
     const db = getDb();
-    const project = db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(projectId, user.id);
+    const project = await db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(projectId, user.id);
     if (!project) {
       return c.json({ error: 'Project not found' }, 404);
     }
@@ -42,7 +42,7 @@ kbRoutes.post('/upload', async (c) => {
   const finalKbId = kbId || crypto.randomUUID();
   const db = getDb();
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO kb_chunks (id, kb_id, user_id, agent_id, source_file, content, chunk_index, project_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(crypto.randomUUID(), finalKbId, user.id, agentId, file.name, '', 0, projectId);
@@ -85,11 +85,11 @@ kbRoutes.post('/search', async (c) => {
   // Get KB sources for this user (optionally scoped to project)
   let sources;
   if (projectId) {
-    sources = db.prepare(`
+    sources = await db.prepare(`
       SELECT DISTINCT kb_id FROM kb_chunks WHERE user_id = ? AND project_id = ?
     `).all(user.id, projectId) as Array<{ kb_id: string }>;
   } else {
-    sources = db.prepare(`
+    sources = await db.prepare(`
       SELECT DISTINCT kb_id FROM kb_chunks WHERE user_id = ?
     `).all(user.id) as Array<{ kb_id: string }>;
   }
@@ -140,7 +140,7 @@ kbRoutes.get('/sources', async (c) => {
 
   query += ' GROUP BY kb_id, source_file ORDER BY last_updated DESC';
 
-  const sources = db.prepare(query).all(...params);
+  const sources = await db.prepare(query).all(...params);
 
   return c.json({ sources });
 });
@@ -152,10 +152,10 @@ kbRoutes.delete('/sources/:kbId', async (c) => {
   const db = getDb();
 
   // Delete chunks
-  deleteChunks(kbId);
+  await deleteChunks(kbId);
 
   // Delete source record
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM kb_chunks WHERE kb_id = ? AND user_id = ?
   `).run(kbId, user.id);
 
@@ -192,7 +192,7 @@ kbRoutes.get('/agent-permissions/:agentId', async (c) => {
   const agentId = c.req.param('agentId');
   const db = getDb();
 
-  const permissions = db.prepare(`
+  const permissions = await db.prepare(`
     SELECT akp.id, akp.agent_id, akp.kb_id, akp.permission, akp.created_at,
       kbs.source_file as kb_name
     FROM agent_kb_permissions akp
@@ -221,7 +221,7 @@ kbRoutes.put('/agent-permissions', async (c) => {
   const db = getDb();
 
   // Verify agent exists
-  const agent = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
+  const agent = await db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
   if (!agent) {
     return c.json({ error: 'Agent not found' }, 404);
   }
@@ -229,16 +229,16 @@ kbRoutes.put('/agent-permissions', async (c) => {
   const id = crypto.randomUUID();
 
   // Upsert permission
-  const existing = db.prepare(`
+  const existing = await db.prepare(`
     SELECT id FROM agent_kb_permissions WHERE agent_id = ? AND kb_id = ?
   `).get(agentId, kbId) as any;
 
   if (existing) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE agent_kb_permissions SET permission = ? WHERE agent_id = ? AND kb_id = ?
     `).run(permission, agentId, kbId);
   } else {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO agent_kb_permissions (id, agent_id, kb_id, permission, user_id)
       VALUES (?, ?, ?, ?, ?)
     `).run(id, agentId, kbId, permission, user.id);

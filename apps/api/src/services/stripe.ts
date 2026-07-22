@@ -51,7 +51,7 @@ export const PLANS = {
 // ── Get or create Stripe customer ──
 async function getOrCreateStripeCustomer(userId: string, email?: string): Promise<string> {
   const db = getDb();
-  const sub = db.prepare('SELECT stripe_customer_id FROM subscriptions WHERE user_id = ?').get(userId) as any;
+  const sub = await db.prepare('SELECT stripe_customer_id FROM subscriptions WHERE user_id = ?').get(userId) as any;
   if (sub?.stripe_customer_id) return sub.stripe_customer_id;
 
   const params = new URLSearchParams();
@@ -68,7 +68,7 @@ async function getOrCreateStripeCustomer(userId: string, email?: string): Promis
   }
 
   const customer = await res.json() as any;
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO subscriptions (id, user_id, stripe_customer_id, plan, status)
     VALUES (?, ?, ?, 'free', 'active')
     ON CONFLICT(user_id) DO UPDATE SET stripe_customer_id = excluded.stripe_customer_id
@@ -130,7 +130,7 @@ export async function createPortalSession(customerId: string): Promise<{ url: st
 // ── Get user's subscription ──
 export function getSubscription(userId: string) {
   const db = getDb();
-  const sub = db.prepare(`
+  const sub = await db.prepare(`
     SELECT id, user_id, stripe_customer_id, stripe_subscription_id, plan, status,
            current_period_start, current_period_end, created_at, updated_at
     FROM subscriptions WHERE user_id = ?

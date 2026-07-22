@@ -10,7 +10,7 @@ agentRoutes.post('/', async (c) => {
   const id = crypto.randomUUID();
 
   const db = getDb();
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO agents (id, user_id, name, type, description, system_prompt, model)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, user.id, name, type || 'sub', description || '', systemPrompt || '', model || 'claude-sonnet-4-20250514');
@@ -23,7 +23,7 @@ agentRoutes.get('/', async (c) => {
   const user = c.get('user');
   const db = getDb();
 
-  const agents = db.prepare(`
+  const agents = await db.prepare(`
     SELECT id, name, type, description, model, created_at
     FROM agents WHERE user_id = ?
     ORDER BY created_at DESC
@@ -46,7 +46,7 @@ agentRoutes.put('/:id', async (c) => {
   const setClauses = fields.map(f => `${f} = ?`).join(', ');
   const values = fields.map(f => updates[f === 'system_prompt' ? 'systemPrompt' : f] || updates[f]);
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE agents SET ${setClauses}, updated_at = unixepoch()
     WHERE id = ? AND user_id = ?
   `).run(...values, agentId, user.id);
@@ -60,9 +60,9 @@ agentRoutes.delete('/:id', async (c) => {
   const agentId = c.req.param('id');
   const db = getDb();
 
-  db.prepare(`DELETE FROM agents WHERE id = ? AND user_id = ?`).run(agentId, user.id);
+  await db.prepare(`DELETE FROM agents WHERE id = ? AND user_id = ?`).run(agentId, user.id);
   // Clean up KB permissions for this agent
-  db.prepare(`DELETE FROM agent_kb_permissions WHERE agent_id = ? AND user_id = ?`).run(agentId, user.id);
+  await db.prepare(`DELETE FROM agent_kb_permissions WHERE agent_id = ? AND user_id = ?`).run(agentId, user.id);
   return c.json({ success: true });
 });
 
@@ -75,12 +75,12 @@ agentRoutes.get('/:id/kb-permissions', async (c) => {
   const db = getDb();
 
   // Verify agent exists
-  const agent = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
+  const agent = await db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
   if (!agent) {
     return c.json({ error: 'Agent not found' }, 404);
   }
 
-  const permissions = db.prepare(`
+  const permissions = await db.prepare(`
     SELECT akp.id, akp.agent_id, akp.kb_id, akp.permission, akp.created_at,
       kbs.source_file as kb_name
     FROM agent_kb_permissions akp
@@ -101,7 +101,7 @@ agentRoutes.put('/:id/kb-permissions', async (c) => {
   const db = getDb();
 
   // Verify agent exists
-  const agent = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
+  const agent = await db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
   if (!agent) {
     return c.json({ error: 'Agent not found' }, 404);
   }
@@ -110,16 +110,16 @@ agentRoutes.put('/:id/kb-permissions', async (c) => {
     return c.json({ error: 'kbId and valid permission (allow/ask/deny) required' }, 400);
   }
 
-  const existing = db.prepare(`
+  const existing = await db.prepare(`
     SELECT id FROM agent_kb_permissions WHERE agent_id = ? AND kb_id = ?
   `).get(agentId, kbId) as any;
 
   if (existing) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE agent_kb_permissions SET permission = ? WHERE agent_id = ? AND kb_id = ?
     `).run(permission, agentId, kbId);
   } else {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO agent_kb_permissions (id, agent_id, kb_id, permission, user_id)
       VALUES (?, ?, ?, ?, ?)
     `).run(crypto.randomUUID(), agentId, kbId, permission, user.id);
@@ -135,20 +135,20 @@ agentRoutes.get('/:id/kb-available', async (c) => {
   const db = getDb();
 
   // Verify agent exists
-  const agent = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
+  const agent = await db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(agentId, user.id);
   if (!agent) {
     return c.json({ error: 'Agent not found' }, 404);
   }
 
   // Get all KBs (global + project-scoped)
-  const allKBs = db.prepare(`
+  const allKBs = await db.prepare(`
     SELECT DISTINCT kb_id, source_file, project_id
     FROM kb_chunks
     WHERE user_id = ?
   `).all(user.id) as Array<{ kb_id: string; source_file: string; project_id: string | null }>;
 
   // Get existing permissions for this agent
-  const permissions = db.prepare(`
+  const permissions = await db.prepare(`
     SELECT kb_id, permission FROM agent_kb_permissions
     WHERE agent_id = ? AND user_id = ?
   `).all(agentId, user.id) as Array<{ kb_id: string; permission: string }>;
