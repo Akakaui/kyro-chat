@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'crypto';
 import { mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Readable } from 'stream';
+import { getDb } from '../db/init.js';
 
 const docker = new Docker({ socketPath: process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock' });
 
@@ -411,6 +412,9 @@ class BrowserService {
 
       this.sessions.set(sessionId, session);
 
+      // Save persistent sessions to database
+      await this.saveSession(session);
+
       // Auto-cleanup after 1 hour (skip for persistent)
       if (!persistent) {
         setTimeout(() => {
@@ -454,6 +458,9 @@ class BrowserService {
 
     session.status = 'stopped';
     this.sessions.delete(sessionId);
+
+    // Delete from database
+    await this.deleteSession(sessionId);
   }
 
   /**
@@ -547,6 +554,86 @@ class BrowserService {
     const sessions = Array.from(this.sessions.keys());
     for (const sessionId of sessions) {
       await this.stopSession(sessionId);
+    }
+  }
+
+  /**
+   * Save a persistent session to the database
+   */
+  private async saveSession(session: BrowserSession): Promise<void> {
+    if (!session.persistent) return;
+    try {
+      const db = getDb();
+      await db.prepare(
+        `INSERT INTO browser_sessions (id, user_id, container_id, vnc_port, novnc_port, password, persistent, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET container_id = ?, vnc_port = ?, novnc_port = ?, password = ?, status = ?`
+      ).run(session.id, session.userId, session.containerId, session.vncPort, session.novncPort, session.password, 1, session.status, session.createdAt,
+        session.containerId, session.vncPort, session.novncPort, session.password, session.status);
+    } catch (err) {
+      console.error('[BrowserService] Failed to save session to DB:', err);
+    }
+  }
+
+  /**
+   * Delete a session from the database
+   */
+  private async deleteSession(sessionId: string): Promise<void> {
+    try {
+      const db = getDb();
+      await db.prepare('DELETE FROM browser_sessions WHERE id = ?').run(sessionId);
+    } catch (err) {
+      console.error('[BrowserService] Failed to delete session from DB:', err);
+    }
+  }
+
+  /**
+   * Load persistent sessions from DB and re-attach to running containers
+   */
+  async loadPersistentSessions(): Promise<void> {
+    try {
+      const db = getDb();
+      const rows = await db.prepare(
+        `SELECT id, user_id, container_id, vnc_port, novnc_port, password, persistent, status, created_at
+         FROM browser_sessions WHERE persistent = 1 AND status = 'running'`
+      ).all();
+
+      for (const row of rows as any[]) {
+        try {
+          // Verify the container is still running
+          const container = docker.getContainer(row.container_id);
+          const info = await container.inspect();
+          if (info.State.Running) {
+            const session: BrowserSession = {
+              id: row.id,
+              containerId: row.container_id,
+              vncUrl: `vnc://localhost:${row.vnc_port}`,
+              novncPort: row.novnc_port,
+              vncPort: row.vnc_port,
+              password: row.password,
+              status: 'running',
+              userId: row.user_id,
+              persistent: true,
+              createdAt: row.created_at,
+            };
+            this.sessions.set(session.id, session);
+            console.info(`[BrowserService] Re-attached to persistent session ${session.id} for user ${session.userId}`);
+          } else {
+            // Container stopped externally — clean up DB
+            await this.deleteSession(row.id);
+          }
+        } catch {
+          // Container gone — clean up DB
+          await this.deleteSession(row.id);
+        }
+      }
+
+      const count = this.sessions.size;
+      if (count > 0) {
+        console.info(`[BrowserService] Loaded ${count} persistent session(s) from database`);
+      }
+    } catch (err) {
+      console.error('[BrowserService] Failed to load persistent sessions:', err);
     }
   }
 }

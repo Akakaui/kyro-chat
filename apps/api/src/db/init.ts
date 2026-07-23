@@ -201,7 +201,11 @@ export async function initDb() {
         user_id TEXT NOT NULL,
         container_id TEXT NOT NULL,
         vnc_port INTEGER,
-        status TEXT NOT NULL
+        novnc_port INTEGER,
+        password TEXT,
+        persistent INTEGER DEFAULT 0,
+        status TEXT NOT NULL,
+        created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)
       );
 
       CREATE TABLE IF NOT EXISTS api_keys (
@@ -210,9 +214,13 @@ export async function initDb() {
         name TEXT,
         encrypted_key TEXT NOT NULL,
         provider TEXT NOT NULL,
+        base_url TEXT,
+        custom_model TEXT,
+        is_valid INTEGER DEFAULT 1,
         created_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
+        updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000),
         expires_at INTEGER,
-        last_used INTEGER
+        last_used_at INTEGER
       );
 
       CREATE TABLE IF NOT EXISTS usage_tracking (
@@ -270,6 +278,17 @@ export async function initDb() {
         PRIMARY KEY (kb_id, agent_id)
       );
     `);
+
+    // ── Migrations for existing tables ────────────────────────────────────
+    const migrations = [
+      `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS base_url TEXT`,
+      `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS custom_model TEXT`,
+      `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS is_valid INTEGER DEFAULT 1`,
+      `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)`,
+    ];
+    for (const sql of migrations) {
+      await pool.query(sql).catch(() => {});
+    }
 
     console.log('✅ PostgreSQL database schema created successfully');
     return { success: true };

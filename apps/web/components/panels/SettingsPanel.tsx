@@ -378,6 +378,33 @@ function CapabilitiesSection({
             )} />
           </button>
         </div>
+
+        {/* Persistent Browser toggle — shown when browser is enabled */}
+        {browserEnabled && (
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-[#22222a] bg-[#0c0c0e] px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-500/10">
+                <span className="text-[10px] font-bold text-amber-500">⏱</span>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold text-gray-200">Persistent Session</div>
+                <div className="text-[10px] text-gray-500">Keep cookies & logins across chats</div>
+              </div>
+            </div>
+            <button
+              onClick={togglePersistentBrowser}
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                persistentBrowser ? "bg-amber-500" : "bg-gray-800"
+              )}
+            >
+              <span className={cn(
+                "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                persistentBrowser ? "left-[18px]" : "left-0.5"
+              )} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Capabilities List */}

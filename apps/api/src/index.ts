@@ -249,6 +249,12 @@ getRedis()
 appMonitor.start();
 startPeriodicMonitoring(120_000); // Log memory/CPU every 2 minutes
 
+// ── Load persistent browser sessions from DB ─────────────────────────────
+import { browserService } from './browser/service.js';
+browserService.loadPersistentSessions().catch((err) => {
+  console.error('[BrowserService] Failed to load persistent sessions:', err.message);
+});
+
 // ── Graceful shutdown ───────────────────────────────────────────────────
 const signals = ['SIGTERM', 'SIGINT'] as const;
 for (const signal of signals) {
