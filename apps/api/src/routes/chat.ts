@@ -191,10 +191,62 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
     }
   }
 
-  // Use provided API key or fallback to env
-  const resolvedApiKey = apiKey || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
-  const resolvedProvider = provider || 'anthropic';
+  // ── Resolve provider, API key, and base URL ──────────────────────────────
+  // If the frontend sends a BYOK model (format: "provider/model"), split it
   const resolvedModel = model || conversation.model || 'claude-sonnet-4-20250514';
+  let resolvedProvider = provider || 'anthropic';
+  let resolvedApiKey = apiKey;
+  let resolvedBaseURL: string | undefined;
+
+  // Try to resolve from user's stored API keys
+  const userKeys = await db.prepare(`
+    SELECT provider, encrypted_key, base_url, custom_model FROM api_keys WHERE user_id = ?
+  `).all(user.id) as Array<{ provider: string; encrypted_key: string; base_url: string | null; custom_model: string | null }>;
+
+  if (resolvedApiKey) {
+    // Frontend sent a key directly (legacy flow) — still resolve baseURL
+    const match = userKeys.find(k => k.provider === resolvedProvider);
+    if (match?.base_url) resolvedBaseURL = match.base_url;
+  } else {
+    // No key sent — find from stored keys
+    // First try: exact provider match
+    let found = userKeys.find(k => k.provider === resolvedProvider);
+
+    // Second try: match BYOK model format (provider/modelId)
+    if (!found) {
+      const [byokProvider] = resolvedModel.split('/');
+      if (byokProvider) {
+        found = userKeys.find(k => k.provider === byokProvider);
+        if (found) resolvedProvider = byokProvider;
+      }
+    }
+
+    // Third try: any available key
+    if (!found && userKeys.length > 0) {
+      found = userKeys[0];
+      resolvedProvider = found.provider;
+    }
+
+    if (found) {
+      const { decryptApiKey } = await import('../lib/encryption.js');
+      resolvedApiKey = await decryptApiKey(found.encrypted_key);
+      if (found.base_url) resolvedBaseURL = found.base_url;
+    }
+  }
+
+  // Final fallback to env keys
+  if (!resolvedApiKey) {
+    if (process.env.ANTHROPIC_API_KEY) {
+      resolvedApiKey = process.env.ANTHROPIC_API_KEY;
+      resolvedProvider = resolvedProvider || 'anthropic';
+    } else if (process.env.OPENAI_API_KEY) {
+      resolvedApiKey = process.env.OPENAI_API_KEY;
+      resolvedProvider = resolvedProvider || 'openai';
+    } else if (process.env.GOOGLE_AI_API_KEY) {
+      resolvedApiKey = process.env.GOOGLE_AI_API_KEY;
+      resolvedProvider = resolvedProvider || 'google';
+    }
+  }
 
   if (!resolvedApiKey) {
     return c.json({ error: 'No API key configured. Please add your API key in Settings.' }, 400);
@@ -234,6 +286,7 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
           apiKey: resolvedApiKey,
           provider: resolvedProvider,
           model: resolvedModel,
+          baseURL: resolvedBaseURL,
           userId: user.id,
           sessionId: conversationId,
           sandboxId,
@@ -267,7 +320,7 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
         }
       } else {
         // Direct streaming without agent (simpler path)
-        const aiModel = getModel(resolvedProvider, resolvedApiKey, resolvedModel);
+        const aiModel = getModel(resolvedProvider, resolvedApiKey, resolvedModel, resolvedBaseURL);
 
         const result = streamText({
           model: aiModel,

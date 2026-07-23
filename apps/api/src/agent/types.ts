@@ -97,6 +97,7 @@ export interface AgentConfig {
   apiKey: string;
   provider: string;
   model: string;
+  baseURL?: string;
   userId?: string;
   sessionId?: string;
   sandboxId?: string;

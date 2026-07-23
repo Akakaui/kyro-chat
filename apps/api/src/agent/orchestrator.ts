@@ -108,7 +108,8 @@ export class AgentOrchestrator {
       const model = getModel(
         this.config.provider,
         this.config.apiKey,
-        this.config.model
+        this.config.model,
+        this.config.baseURL
       );
       const systemPrompt = this.buildSystemPrompt();
       const tools = this.buildTools(context);
@@ -240,7 +241,8 @@ export class AgentOrchestrator {
       const model = getModel(
         this.config.provider,
         this.config.apiKey,
-        this.config.model
+        this.config.model,
+        this.config.baseURL
       );
       const systemPrompt = this.buildSystemPrompt();
       const tools = this.buildTools(context);
