@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   Mail,
   Shield,
+  Pause,
+  Play,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -440,7 +442,7 @@ export function ScheduledPanel() {
                       onClick={() => toggleStatus(task.id)}
                       className="h-7 w-7 flex items-center justify-center rounded-lg text-text-muted hover:bg-bg-tertiary hover:text-text-primary"
                     >
-                      {task.status === "active" ? "⏸" : "▶"}
+                      {task.status === "active" ? <Pause size={14} /> : <Play size={14} />}
                     </button>
                     <button
                       onClick={() => startEdit(task)}

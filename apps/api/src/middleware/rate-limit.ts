@@ -53,6 +53,9 @@ const MAX_FAILED_AUTH_ATTEMPTS = 5;
 /** Account lockout duration: 15 minutes */
 const AUTH_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
+/** Maximum PostgreSQL INTEGER value (32-bit signed) */
+const MAX_PG_INTEGER = 2_147_483_647;
+
 /** Cleanup interval: 60 seconds */
 const CLEANUP_INTERVAL_MS = 60_000;
 
@@ -131,7 +134,8 @@ export async function trackFailedAuthAttempt(
   try {
     const pool = getPgPool();
 
-    // Upsert IP reputation record
+    // Upsert IP reputation record (use seconds for PostgreSQL INTEGER safety)
+    const nowSeconds = Math.min(Math.floor(Date.now() / 1000), MAX_PG_INTEGER);
     await pool.query(
       `INSERT INTO ip_reputation (ip_address, score, failed_attempts, last_seen)
        VALUES ($1, $2, $3, $4)
@@ -139,7 +143,7 @@ export async function trackFailedAuthAttempt(
          failed_attempts = ip_reputation.failed_attempts + 1,
          score = ip_reputation.score - 10,
          last_seen = $4`,
-      [ipAddress, -10, 1, Date.now()]
+      [ipAddress, -10, 1, nowSeconds]
     );
 
     // Check current attempt count
@@ -152,10 +156,14 @@ export async function trackFailedAuthAttempt(
     const remainingAttempts = Math.max(0, MAX_FAILED_AUTH_ATTEMPTS - failedAttempts);
 
     if (failedAttempts >= MAX_FAILED_AUTH_ATTEMPTS) {
-      // Lock the IP
+      // Lock the IP (use seconds for PostgreSQL INTEGER safety)
+      const lockUntilSeconds = Math.min(
+        Math.floor((Date.now() + AUTH_LOCKOUT_DURATION_MS) / 1000),
+        MAX_PG_INTEGER,
+      );
       await pool.query(
         `UPDATE ip_reputation SET blocked_until = $1 WHERE ip_address = $2`,
-        [Date.now() + AUTH_LOCKOUT_DURATION_MS, ipAddress]
+        [lockUntilSeconds, ipAddress]
       );
 
       await logSecurityEvent(
@@ -199,9 +207,10 @@ export async function isIPBlocked(ipAddress: string): Promise<boolean> {
 
   try {
     const pool = getPgPool();
+    const nowSeconds = Math.floor(Date.now() / 1000);
     const result = await pool.query(
       'SELECT blocked_until FROM ip_reputation WHERE ip_address = $1 AND blocked_until > $2',
-      [ipAddress, Date.now()]
+      [ipAddress, nowSeconds]
     );
     return result.rows.length > 0;
   } catch (err) {

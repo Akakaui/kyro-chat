@@ -17,7 +17,7 @@ export const storageRoutes = new Hono();
 
 // ── Upload file (multipart) ────────────────────────────────────────────────
 
-storageRoutes.post('/storage/upload', async (c) => {
+storageRoutes.post('/upload', async (c) => {
   const user = c.get('user');
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
@@ -79,7 +79,7 @@ storageRoutes.post('/storage/upload', async (c) => {
 
 // ── Download file ──────────────────────────────────────────────────────────
 
-storageRoutes.get('/storage/download/:key{.+}', async (c) => {
+storageRoutes.get('/download/:key{.+}', async (c) => {
   const encodedKey = c.req.param('key') || '';
 
   try {
@@ -116,7 +116,7 @@ storageRoutes.get('/storage/download/:key{.+}', async (c) => {
 
 // ── Get file info ──────────────────────────────────────────────────────────
 
-storageRoutes.get('/storage/info/:key{.+}', async (c) => {
+storageRoutes.get('/info/:key{.+}', async (c) => {
   const encodedKey = c.req.param('key') || '';
 
   try {
@@ -141,7 +141,7 @@ storageRoutes.get('/storage/info/:key{.+}', async (c) => {
 
 // ── Delete file ────────────────────────────────────────────────────────────
 
-storageRoutes.delete('/storage/:key{.+}', async (c) => {
+storageRoutes.delete('/:key{.+}', async (c) => {
   const user = c.get('user');
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
@@ -159,7 +159,7 @@ storageRoutes.delete('/storage/:key{.+}', async (c) => {
 
 // ── Get storage usage ──────────────────────────────────────────────────────
 
-storageRoutes.get('/storage/usage', async (c) => {
+storageRoutes.get('/usage', async (c) => {
   const user = c.get('user');
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
@@ -183,7 +183,7 @@ storageRoutes.get('/storage/usage', async (c) => {
 
 // ── Storage health check ───────────────────────────────────────────────────
 
-storageRoutes.get('/storage/health', async (c) => {
+storageRoutes.get('/health', async (c) => {
   const health = await storageService.checkStorageHealth();
   const status = health.ok ? 200 : 503;
   return c.json(health, status);

@@ -62,30 +62,27 @@ billingRoutes.post('/portal', async (c) => {
 });
 
 // ── POST /billing/webhook — Handle Stripe webhooks ──
-billingRoutes.post('/webhook', async (c) => {
-  const signature = c.req.header('stripe-signature') || '';
-  const payload = await c.req.text();
-
-  try {
-    const result = await handleWebhook(payload, signature);
-    return c.json({ received: true, type: result.type });
-  } catch (err: any) {
-    console.error('[Billing] Webhook handling failed:', err.message);
-    return c.json({ error: 'Webhook processing failed' }, 400);
-  }
-});
+// NOTE: The webhook endpoint is mounted publicly in index.ts (before the
+// auth middleware) so that Stripe can reach it without a JWT. The handler
+// below is kept for reference but is NOT mounted here — the public
+// registration in index.ts takes precedence.
 
 // ── GET /billing/usage — Get current period usage ──
 billingRoutes.get('/usage', async (c) => {
   const user = c.get('user');
-  const subscription = getSubscription(user.id);
-  const usage = getUsage(user.id);
+  try {
+    const subscription = await getSubscription(user.id);
+    const usage = await getUsage(user.id);
 
-  return c.json({
-    usage,
-    limits: subscription.limits,
-    plan: subscription.plan,
-  });
+    return c.json({
+      usage,
+      limits: subscription.limits,
+      plan: subscription.plan,
+    });
+  } catch (err: any) {
+    console.error('[Billing] Failed to fetch usage:', err.message);
+    return c.json({ error: 'Failed to fetch usage data' }, 500);
+  }
 });
 
 // ── GET /billing/plans — List available plans ──

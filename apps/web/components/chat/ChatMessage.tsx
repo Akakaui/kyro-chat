@@ -36,7 +36,7 @@ export function ChatMessage({
   onCancelTool,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
-  const { setActiveArtifact, setArtifactViewerOpen, selectedModel } = useChatStore()
+  const { setActiveArtifact, setArtifactViewerOpen, selectedModel, selectedAgent } = useChatStore()
 
   // Mock permission state: tracks decisions for tool call IDs
   const [permissionDecisions, setPermissionDecisions] = useState<
@@ -85,10 +85,13 @@ export function ChatMessage({
           isUser ? "order-1 ml-auto" : "order-2"
         )}
       >
-        {/* Model name label — assistant messages only */}
+        {/* Model + Agent name label — assistant messages only */}
         {!isUser && (
           <div className="mb-1 text-[11px] font-medium text-zinc-500">
             {selectedModel?.name || "assistant"}
+            {selectedAgent?.name && (
+              <span className="text-zinc-600"> / {selectedAgent.name}</span>
+            )}
           </div>
         )}
         {/* Message bubble */}

@@ -69,6 +69,16 @@ healthRoutes.get('/ready', (c) => {
   return c.json({ status: 'ready', timestamp: new Date().toISOString() });
 });
 
+// ── Version endpoint ──────────────────────────────────────────────────────
+
+healthRoutes.get('/version', (c) => {
+  return c.json({
+    version: process.env.npm_package_version || '1.0.0',
+    node: process.version,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ── Liveness probe ────────────────────────────────────────────────────────
 
 healthRoutes.get('/live', (c) => {

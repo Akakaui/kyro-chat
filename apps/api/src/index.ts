@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { authMiddleware } from './middleware/auth.js';
+import { bodyLimit } from 'hono/body-limit';
 import { securityHeaders } from './middleware/security-headers.js';
 import { authLimiter, apiLimiter, chatLimiter, modelLimiter } from './middleware/rate-limit.js';
 import { enhancedAuth, requireAdmin } from './middleware/enhanced-auth.js';
@@ -42,6 +42,9 @@ import { initSandbox, shutdownSandbox } from './services/sandbox/index.js';
 
 const app = new Hono();
 
+// ── Global body size limit (1 MB) ────────────────────────────────────────
+app.use('*', bodyLimit({ maxSize: 1024 * 1024 }));
+
 app.use('*', logger());
 
 // ── Sentry (non-blocking init) ──────────────────────────────────────────
@@ -68,8 +71,41 @@ app.use('*', cors({
 }));
 app.use('*', securityHeaders);
 
-// Public routes
+// ── Public routes (no auth) ──────────────────────────────────────────────
 app.route('/health', healthRoutes);
+
+// Public webhook route — Stripe must reach this without auth tokens.
+// Mounted BEFORE the protected sub-app so the enhancedAuth middleware does
+// not intercept it.
+app.post('/api/billing/webhook', async (c) => {
+  // Forward to billing webhook handler directly (no auth required)
+  const { handleWebhook } = await import('./services/stripe.js');
+  const signature = c.req.header('stripe-signature') || '';
+  const payload = await c.req.text();
+  try {
+    const result = await handleWebhook(payload, signature);
+    return c.json({ received: true, type: result.type });
+  } catch (err: any) {
+    console.error('[Billing] Webhook handling failed:', err.message);
+    return c.json({ error: 'Webhook processing failed' }, 400);
+  }
+});
+
+// Public artifact share route (no auth required for viewing shared artifacts)
+app.get('/api/artifacts/share/:hash', async (c) => {
+  const { artifactService } = await import('./artifacts/service.js');
+  const hash = c.req.param('hash');
+  const artifact = await artifactService.getByShareHash(hash);
+  if (!artifact) return c.json({ error: 'Not found or expired' }, 404);
+  return c.json({
+    id: artifact.id,
+    title: artifact.title,
+    type: artifact.type,
+    content: artifact.content,
+    metadata: artifact.metadata,
+    shareHash: artifact.shareHash,
+  });
+});
 
 // Public auth routes (login, signup, password reset) — IP-based rate limit
 const authApp = new Hono();
@@ -79,7 +115,7 @@ authApp.use('*', authLimiter);
 // authApp.route('/', authRoutes);
 app.route('/auth', authApp);
 
-// Protected routes (require Supabase JWT + RBAC)
+// ── Protected routes (require Supabase JWT + RBAC) ──────────────────────
 const protectedApp = new Hono();
 protectedApp.use('*', enhancedAuth);
 
@@ -136,14 +172,13 @@ protectedApp.use('/settings/*', apiLimiter);
 protectedApp.route('/rbac', rbacRoutes);
 protectedApp.use('/rbac/*', requireAdmin);
 
-// File storage routes
+// File storage routes (routes are relative to /storage prefix)
 protectedApp.route('/storage', storageRoutes);
 
 app.route('/api', protectedApp);
 
-// Public share route (no auth required)
+// Legacy public share redirect
 app.get('/share/:hash', async (c) => {
-  // Forward to artifacts route
   const hash = c.req.param('hash');
   return c.redirect(`/api/artifacts/share/${hash}`);
 });

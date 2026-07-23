@@ -269,8 +269,14 @@ export async function getAuditLogs(
     eventType,
     startDate,
     endDate,
-    orderDirection = 'DESC',
+    orderDirection: rawOrderDirection = 'DESC',
   } = options;
+
+  // Whitelist allowed ORDER BY directions to prevent SQL injection
+  const ALLOWED_DIRECTIONS = new Set(['ASC', 'DESC']);
+  const orderDirection = ALLOWED_DIRECTIONS.has(rawOrderDirection.toUpperCase())
+    ? rawOrderDirection.toUpperCase()
+    : 'DESC';
 
   const conditions: string[] = ['user_id = $1'];
   const params: unknown[] = [userId];

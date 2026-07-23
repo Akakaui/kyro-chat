@@ -121,6 +121,32 @@ function generateId(): string {
 }
 
 /**
+ * Maximum value for a PostgreSQL INTEGER column (32-bit signed).
+ * Values above this overflow and cause runtime errors.
+ */
+const MAX_INTEGER_VALUE = 2_147_483_647;
+
+/**
+ * Convert a JavaScript millisecond timestamp to a safe PostgreSQL integer
+ * (seconds since epoch), with bounds checking to prevent overflow.
+ * Returns null if the value is outside the safe range.
+ */
+function safeTimestamp(msTimestamp?: number | null): number | null {
+  if (msTimestamp == null) return null;
+  // Convert milliseconds to seconds
+  const seconds = Math.floor(msTimestamp / 1000);
+  // Clamp to PostgreSQL INTEGER max
+  return Math.min(seconds, MAX_INTEGER_VALUE);
+}
+
+/**
+ * Returns the current time as a safe PostgreSQL integer timestamp (seconds).
+ */
+function nowTimestamp(): number {
+  return safeTimestamp(Date.now())!;
+}
+
+/**
  * Execute a parameterized query against PostgreSQL.
  * Returns rows array or throws.
  * Gracefully returns empty array when PostgreSQL is not available.
@@ -184,7 +210,7 @@ export class RoleManager {
          ON CONFLICT (name) DO UPDATE SET
            description = EXCLUDED.description,
            is_system = TRUE`,
-        [role.id, role.name, role.description, Date.now()]
+        [role.id, role.name, role.description, nowTimestamp()]
       );
 
       // Insert permissions for this role
@@ -214,7 +240,7 @@ export class RoleManager {
     await executeWrite(
       `INSERT INTO roles (id, name, description, is_system, created_at)
        VALUES ($1, $2, $3, FALSE, $4)`,
-      [id, name, description || null, Date.now()]
+      [id, name, description || null, nowTimestamp()]
     );
 
     // Assign initial permissions
@@ -230,7 +256,7 @@ export class RoleManager {
       name,
       description: description || null,
       is_system: false,
-      created_at: Date.now(),
+      created_at: nowTimestamp()!,
     };
   }
 
@@ -346,8 +372,8 @@ export class PermissionSystem {
     );
 
     for (const userRole of sortedRoles) {
-      // Check if role is expired
-      if (userRole.expires_at && userRole.expires_at < Date.now()) {
+      // Check if role is expired (expires_at is stored in seconds)
+      if (userRole.expires_at && userRole.expires_at < nowTimestamp()!) {
         continue;
       }
 
@@ -436,7 +462,7 @@ export class UserRoleService {
          assigned_by = EXCLUDED.assigned_by,
          assigned_at = EXCLUDED.assigned_at,
          expires_at = EXCLUDED.expires_at`,
-      [userId, roleId, assignedBy || null, Date.now(), expiresAt || null]
+      [userId, roleId, assignedBy || null, nowTimestamp(), safeTimestamp(expiresAt)]
     );
 
     // Audit log
