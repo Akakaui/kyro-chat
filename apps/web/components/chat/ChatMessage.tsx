@@ -2,8 +2,6 @@
 
 import { useState, useCallback, type ReactNode } from "react"
 import {
-  Bot,
-  User,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -28,7 +26,6 @@ interface ChatMessageProps {
   message: Message
   isLast?: boolean
   onRegenerate?: (messageId: string) => void
-  onUndo?: (messageId: string) => void
   onCancelTool?: (taskId: string) => void
 }
 
@@ -36,11 +33,10 @@ export function ChatMessage({
   message,
   isLast = false,
   onRegenerate,
-  onUndo,
   onCancelTool,
 }: ChatMessageProps) {
   const isUser = message.role === "user"
-  const { setActiveArtifact, setArtifactViewerOpen } = useChatStore()
+  const { setActiveArtifact, setArtifactViewerOpen, selectedModel } = useChatStore()
 
   // Mock permission state: tracks decisions for tool call IDs
   const [permissionDecisions, setPermissionDecisions] = useState<
@@ -83,19 +79,18 @@ export function ChatMessage({
         isUser ? "justify-end" : "justify-start"
       )}
     >
-      {/* Assistant avatar */}
-      {!isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
-          <Bot size={16} className="text-white" />
-        </div>
-      )}
-
       <div
         className={cn(
           "max-w-[85%] md:max-w-[70%]",
-          isUser ? "order-1" : "order-2"
+          isUser ? "order-1 ml-auto" : "order-2"
         )}
       >
+        {/* Model name label — assistant messages only */}
+        {!isUser && (
+          <div className="mb-1 text-[11px] font-medium text-zinc-500">
+            {selectedModel?.name || "assistant"}
+          </div>
+        )}
         {/* Message bubble */}
         <div
           className={cn(
@@ -112,7 +107,6 @@ export function ChatMessage({
             isLast={isLast}
             content={message.content}
             onRegenerate={onRegenerate}
-            onUndo={onUndo}
           />
 
           {isUser ? (
@@ -382,13 +376,6 @@ export function ChatMessage({
           </div>
         )}
       </div>
-
-      {/* User avatar */}
-      {isUser && (
-        <div className="order-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary">
-          <User size={16} className="text-text-secondary" />
-        </div>
-      )}
     </div>
   )
 }

@@ -108,14 +108,26 @@ interface ChatState {
   toggleDislike: (messageId: string) => void
 
   // Overlay states
+  artifactQueueOpen: boolean
+  setArtifactQueueOpen: (open: boolean) => void
   addToChatOverlayOpen: boolean
   setAddToChatOverlayOpen: (open: boolean) => void
   modelSelectorOpen: boolean
   setModelSelectorOpen: (open: boolean) => void
-  artifactQueueOpen: boolean
-  setArtifactQueueOpen: (open: boolean) => void
   shareDialogOpen: boolean
   setShareDialogOpen: (open: boolean) => void
+
+  // Slide panel tabs (Phase 1)
+  activeSlideTab: "chats" | "projects" | "artifacts"
+  setActiveSlideTab: (tab: "chats" | "projects" | "artifacts") => void
+
+  // Selected agent for ChatInput (Phase 2)
+  selectedAgent: Agent | null
+  setSelectedAgent: (agent: Agent | null) => void
+
+  // Artifact bottom sheet (Phase 3)
+  artifactSheetOpen: boolean
+  setArtifactSheetOpen: (open: boolean) => void
 
   // Connectors
   connectors: Connector[]
@@ -175,6 +187,17 @@ interface ChatState {
   setSandboxFileViewerOpen: (open: boolean) => void
   activeSandboxFile: SandboxFile | null
   setActiveSandboxFile: (file: SandboxFile | null) => void
+  sandboxExpiration: number | null
+  setSandboxExpiration: (ts: number | null) => void
+
+  // Auto model switch (Phase 7)
+  autoModelSwitch: {
+    enabled: boolean
+    lastSwitchTime: number | null
+    switchedFrom: string | null
+    switchedTo: string | null
+  }
+  setAutoModelSwitch: (patch: Partial<ChatState["autoModelSwitch"]>) => void
 
   // Permission prompts (inline)
   pendingPermissions: Array<{
@@ -423,6 +446,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
   shareDialogOpen: false,
   setShareDialogOpen: (open) => set({ shareDialogOpen: open }),
 
+  // Slide panel tabs (Phase 1)
+  activeSlideTab: "chats",
+  setActiveSlideTab: (tab) => set({ activeSlideTab: tab }),
+
+  // Selected agent for ChatInput (Phase 2)
+  selectedAgent: null,
+  setSelectedAgent: (agent) => set({ selectedAgent: agent }),
+
+  // Artifact bottom sheet (Phase 3)
+  artifactSheetOpen: false,
+  setArtifactSheetOpen: (open) => set({ artifactSheetOpen: open }),
+
   // Connectors
   connectors: [
     {
@@ -557,6 +592,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setSandboxFileViewerOpen: (open) => set({ sandboxFileViewerOpen: open }),
   activeSandboxFile: null,
   setActiveSandboxFile: (file) => set({ activeSandboxFile: file }),
+  sandboxExpiration: null,
+  setSandboxExpiration: (ts) => set({ sandboxExpiration: ts }),
+
+  // Auto model switch (Phase 7)
+  autoModelSwitch: {
+    enabled: true,
+    lastSwitchTime: null,
+    switchedFrom: null,
+    switchedTo: null,
+  },
+  setAutoModelSwitch: (patch) =>
+    set((state) => ({
+      autoModelSwitch: { ...state.autoModelSwitch, ...patch },
+    })),
 
   // Permission prompts (inline)
   pendingPermissions: [],

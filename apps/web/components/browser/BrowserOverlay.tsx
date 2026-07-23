@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import {
   Globe,
-  X,
-  Maximize2,
   Minimize2,
   Monitor,
   User,
@@ -45,6 +43,7 @@ export function BrowserOverlay({
   const [tabs, setTabs] = useState<Tab[]>([])
   const [currentUrl, setCurrentUrl] = useState(initialUrl)
   const [isConnected, setIsConnected] = useState(false)
+  const [wasEverOpened, setWasEverOpened] = useState(false)
 
   const {
     humanInputRequired,
@@ -139,7 +138,22 @@ export function BrowserOverlay({
     }
   }, [initialUrl])
 
-  if (!isOpen) return null
+  // Auto-expand when isOpen becomes true; collapse when dismissed
+  useEffect(() => {
+    if (isOpen) {
+      setIsExpanded(true)
+      setWasEverOpened(true)
+    }
+  }, [isOpen])
+
+  // Collapse handler — collapse instead of unmounting
+  const handleDismiss = useCallback(() => {
+    setIsExpanded(false)
+    onClose()
+  }, [onClose])
+
+  // Don't render at all until we've been opened at least once
+  if (!wasEverOpened && !isOpen) return null
 
   return (
     <div
@@ -175,23 +189,10 @@ export function BrowserOverlay({
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() => setIsExpanded(!isExpanded)}
-            aria-label={isExpanded ? "Collapse browser" : "Expand browser"}
+            onClick={handleDismiss}
+            aria-label="Collapse browser"
           >
-            {isExpanded ? (
-              <Minimize2 size={14} className="text-text-muted" />
-            ) : (
-              <Maximize2 size={14} className="text-text-muted" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onClose}
-            aria-label="Close browser"
-          >
-            <X size={14} className="text-text-muted" />
+            <Minimize2 size={14} className="text-text-muted" />
           </Button>
         </div>
       </div>

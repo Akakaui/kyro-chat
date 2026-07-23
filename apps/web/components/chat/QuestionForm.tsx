@@ -188,21 +188,21 @@ export function QuestionForm({
         <div className="flex gap-2 px-3 pb-3">
           <Button
             size="sm"
-            variant="outline"
             onClick={() => onAnswer(questionId, "yes")}
             disabled={disabled}
-            className="flex-1"
+            className="flex-1 gap-1.5"
           >
-            Yes
+            <Send size={12} />
+            Submit
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="ghost"
             onClick={() => onAnswer(questionId, "no")}
             disabled={disabled}
-            className="flex-1"
+            className="flex-1 text-text-muted"
           >
-            No
+            Dismiss
           </Button>
         </div>
       )}

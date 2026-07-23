@@ -12,6 +12,8 @@ import { QuestionForm } from "./QuestionForm"
 import { TaskBadge, type TaskInfo } from "./TaskBadge"
 import { BrowserOverlay } from "../browser/BrowserOverlay"
 import { IncognitoToggle } from "./IncognitoToggle"
+import { ArtifactPill } from "../artifacts/ArtifactPill"
+import { ArtifactBottomSheet } from "../artifacts/ArtifactBottomSheet"
 
 export function ChatView() {
   const {
@@ -508,15 +510,6 @@ export function ChatView() {
     [messages, activeConversation, setMessages, addMessage, updateMessage, setStreaming, setAgentStatus, selectedModel]
   )
 
-  const handleUndo = useCallback(
-    (messageId: string) => {
-      const idx = messages.findIndex((m) => m.id === messageId)
-      if (idx < 0) return
-      setMessages(messages.slice(0, idx))
-    },
-    [messages, setMessages]
-  )
-
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
@@ -686,7 +679,6 @@ export function ChatView() {
                   message={msg}
                   isLast={i === messages.length - 1}
                   onRegenerate={handleRegenerate}
-                  onUndo={handleUndo}
                   onCancelTool={handleCancelTool}
                 />
               ))}
@@ -765,6 +757,10 @@ export function ChatView() {
         url={browserState.url}
         status={browserState.status}
       />
+
+      {/* Phase 3: Artifact floating pill and bottom sheet (mobile) */}
+      <ArtifactPill />
+      <ArtifactBottomSheet />
     </div>
   )
 }

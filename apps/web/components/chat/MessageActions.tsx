@@ -7,7 +7,6 @@ import {
   ThumbsUp,
   ThumbsDown,
   RotateCw,
-  Undo2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useChatStore } from "@/stores/chat"
@@ -18,7 +17,6 @@ interface MessageActionsProps {
   isLast: boolean
   content: string
   onRegenerate?: (messageId: string) => void
-  onUndo?: (messageId: string) => void
 }
 
 export function MessageActions({
@@ -27,7 +25,6 @@ export function MessageActions({
   isLast,
   content,
   onRegenerate,
-  onUndo,
 }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
 
@@ -94,17 +91,6 @@ export function MessageActions({
           active={false}
         >
           <RotateCw size={14} />
-        </ActionBtn>
-      )}
-
-      {/* Undo — only on last user message */}
-      {isUser && isLast && (
-        <ActionBtn
-          onClick={() => onUndo?.(messageId)}
-          tooltip="Undo"
-          active={false}
-        >
-          <Undo2 size={14} />
         </ActionBtn>
       )}
     </div>

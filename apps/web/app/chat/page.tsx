@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { ChatView } from '../../components/chat/ChatView';
 import { SettingsPanel } from '../../components/panels/SettingsPanel';
 import { ModelSelector } from '../../components/chat/ModelSelector';
@@ -184,6 +185,7 @@ export default function ChatPage() {
 
   return (
     <QueryClientProvider client={queryClient}>
+    <TooltipProvider delayDuration={300}>
     <div className="flex h-screen bg-bg-primary">
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -492,6 +494,7 @@ export default function ChatPage() {
       {/* Add to Chat overlay */}
       <AddToChatOverlay />
     </div>
+    </TooltipProvider>
     </QueryClientProvider>
   );
 }

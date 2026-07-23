@@ -107,7 +107,7 @@ export function SettingsPanel() {
           <div className="flex h-14 items-center justify-between px-4 border-b border-[#1e1e24]">
             <div className="flex items-center gap-2">
               <SettingsIcon size={18} className="text-amber-500" />
-              <span className="text-sm font-bold text-gray-100">Kyro Settings</span>
+              <span className="text-sm font-bold text-gray-100">Settings</span>
             </div>
             <button
               onClick={() => setSettingsPanelOpen(false)}

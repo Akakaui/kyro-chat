@@ -17,11 +17,13 @@
     "test:web": "npx vitest run --config apps/web/vitest.config.ts"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/dockerode": "^4.0.1",
     "@types/imap-simple": "^4.2.10",
     "@types/mailparser": "^3.4.6",
     "@types/nodemailer": "^8.0.1",
     "concurrently": "^9.2.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.8.2",
     "vitest": "^4.1.10"
   },

@@ -127,7 +127,7 @@ export function ModelSelector() {
           <button
             onClick={() => {
               setModelSelectorOpen(false)
-              window.location.hash = "#settings-providers"
+              globalThis.location.hash = "#settings-providers"
             }}
             className="flex w-full items-center gap-2 rounded-xl bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/20"
           >

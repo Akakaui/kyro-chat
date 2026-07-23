@@ -18,6 +18,8 @@ import {
   Search,
   Brain,
   ChevronDown,
+  Zap,
+  Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useChatStore } from "@/stores/chat"
@@ -30,6 +32,8 @@ import {
   type MentionKB,
   type MentionArtifact,
 } from "./MentionPopup"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import type { Agent } from "@/lib/api"
 
 export interface AttachedFile {
   name: string
@@ -69,6 +73,8 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
     toggleBrowserEnabled,
     settings,
     toggleWebSearch,
+    selectedAgent,
+    setSelectedAgent,
   } = useChatStore()
 
   const [value, setValue] = React.useState("")
@@ -89,6 +95,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
   const [selectedCommand, setSelectedCommand] = React.useState<string | null>(null)
   const [showPlusMenu, setShowPlusMenu] = React.useState(false)
   const [showSecondaryMenu, setShowSecondaryMenu] = React.useState(false)
+  const [showAgentDropdown, setShowAgentDropdown] = React.useState(false)
 
   const slashFilteredCount = React.useMemo(() => {
     if (!showSlashMenu) return 0
@@ -142,6 +149,11 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
     }
     return Array.from(artifactMap.values())
   }, [messages])
+
+  // Filter primary agents (exclude sub-only)
+  const primaryAgents = React.useMemo(() => {
+    return agents.filter((a) => a.type === "primary" || a.type === "both")
+  }, [agents])
 
   React.useEffect(() => {
     const max = showSlashMenu ? slashFilteredCount : showMentionPopup ? 20 : 0
@@ -211,6 +223,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
     setSelectedCommand(null)
     setShowPlusMenu(false)
     setShowSecondaryMenu(false)
+    setShowAgentDropdown(false)
   }, [])
 
   const handleSlashSelect = useCallback(
@@ -235,6 +248,14 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
       textareaRef.current?.focus()
     },
     [value, closePopups]
+  )
+
+  const handleAgentSelect = useCallback(
+    (agent: Agent | null) => {
+      setSelectedAgent(agent)
+      setShowAgentDropdown(false)
+    },
+    [setSelectedAgent]
   )
 
   const handleFileSelect = useCallback(
@@ -454,7 +475,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything..."
+              placeholder={selectedAgent ? `Chat with ${selectedAgent.name}...` : "Ask anything..."}
               rows={1}
               style={{
                 width: "100%",
@@ -581,7 +602,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
                   )}
                 </div>
 
-                {/* Model selector pill */}
+                {/* Model selector pill — "Big Pickle" */}
                 <button
                   onClick={() => setModelSelectorOpen(true)}
                   style={{
@@ -613,6 +634,77 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
                   <span>{selectedModel.name}</span>
                   <ChevronDown size={12} style={{ color: "#737373" }} />
                 </button>
+
+                {/* Agent selector pill — "Build" */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      borderRadius: "100px",
+                      border: "1px solid #2a2a2a",
+                      background: selectedAgent ? "rgba(217,119,6,0.1)" : "#161616",
+                      padding: "4px 10px",
+                      fontSize: "11px",
+                      fontWeight: 500,
+                      color: selectedAgent ? "#d97706" : "#a3a3a3",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement
+                      el.style.borderColor = "rgba(217,119,6,0.4)"
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement
+                      el.style.borderColor = "#2a2a2a"
+                    }}
+                  >
+                    <Users size={12} />
+                    <span>{selectedAgent?.name || "Build"}</span>
+                    <ChevronDown size={12} style={{ color: "#737373" }} />
+                  </button>
+
+                  {showAgentDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowAgentDropdown(false)} />
+                      <div className="absolute bottom-full left-0 mb-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#1a1a20] p-1 shadow-xl z-50">
+                        <button
+                          onClick={() => handleAgentSelect(null)}
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors",
+                            !selectedAgent ? "bg-amber-500/10 text-amber-400" : "text-gray-300 hover:bg-white/5"
+                          )}
+                        >
+                          <Zap size={13} className={!selectedAgent ? "text-amber-400" : "text-gray-500"} />
+                          Default (No Agent)
+                        </button>
+                        {primaryAgents.map((agent) => (
+                          <button
+                            key={agent.id}
+                            onClick={() => handleAgentSelect(agent)}
+                            className={cn(
+                              "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors text-left",
+                              selectedAgent?.id === agent.id ? "bg-amber-500/10 text-amber-400" : "text-gray-300 hover:bg-white/5"
+                            )}
+                          >
+                            <div className="flex h-5 w-5 items-center justify-center rounded bg-blue-500/20 text-[10px] font-bold text-blue-400">
+                              {agent.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-medium">{agent.name}</div>
+                              {agent.description && (
+                                <div className="truncate text-[10px] text-gray-500">{agent.description}</div>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* Act / Plan mode switcher */}
                 <div
