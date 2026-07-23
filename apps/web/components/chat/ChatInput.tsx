@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Zap,
   Users,
+  Monitor,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useChatStore } from "@/stores/chat"
@@ -507,74 +508,6 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
             >
               {/* Left controls */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                {/* Browser toggle */}
-                <button
-                  onClick={toggleBrowserEnabled}
-                  title={browserEnabled ? "Disable browser" : "Enable browser"}
-                  style={{
-                    width: "30px",
-                    height: "30px",
-                    borderRadius: "8px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: browserEnabled ? "#d97706" : "#737373",
-                    background: browserEnabled ? "rgba(217,119,6,0.1)" : "transparent",
-                    border: browserEnabled ? "1px solid rgba(217,119,6,0.3)" : "1px solid transparent",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    flexShrink: 0,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!browserEnabled) {
-                      const el = e.currentTarget as HTMLButtonElement
-                      el.style.background = "#222"
-                      el.style.color = "#ececec"
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!browserEnabled) {
-                      const el = e.currentTarget as HTMLButtonElement
-                      el.style.background = "transparent"
-                      el.style.color = "#737373"
-                    }
-                  }}
-                >
-                  <Globe size={16} />
-                </button>
-
-                {/* Persistent browser pill — only shown when browser is enabled */}
-                {browserEnabled && (
-                  <button
-                    onClick={togglePersistentBrowser}
-                    title={persistentBrowser ? "Persistent: cookies saved across chats" : "Disposable: fresh session each chat"}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      borderRadius: "100px",
-                      border: persistentBrowser ? "1px solid rgba(217,119,6,0.3)" : "1px solid #2a2a2a",
-                      background: persistentBrowser ? "rgba(217,119,6,0.1)" : "#161616",
-                      padding: "3px 8px",
-                      fontSize: "10px",
-                      fontWeight: 500,
-                      color: persistentBrowser ? "#d97706" : "#737373",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                      flexShrink: 0,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <span style={{
-                      width: "6px",
-                      height: "6px",
-                      borderRadius: "50%",
-                      background: persistentBrowser ? "#d97706" : "#555",
-                    }} />
-                    {persistentBrowser ? "Persistent" : "Disposable"}
-                  </button>
-                )}
-
                 {/* Plus button */}
                 <div className="relative">
                   <button
@@ -668,6 +601,40 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
                           {settings.capabilities.web_search ? "ON" : "OFF"}
                         </span>
                       </button>
+
+                      {/* Browser toggle */}
+                      <button
+                        onClick={() => {
+                          toggleBrowserEnabled()
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Monitor size={16} className={browserEnabled ? "text-success" : "text-text-muted"} />
+                          <span>Live Browser</span>
+                        </div>
+                        <span className={cn("text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded", browserEnabled ? "bg-success/20 text-success" : "bg-bg-tertiary text-text-muted")}>
+                          {browserEnabled ? "ON" : "OFF"}
+                        </span>
+                      </button>
+
+                      {/* Persistent browser toggle — shown when browser is enabled */}
+                      {browserEnabled && (
+                        <button
+                          onClick={() => {
+                            togglePersistentBrowser()
+                          }}
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                        >
+                          <div className="flex items-center gap-2.5 pl-4">
+                            <span className={cn("h-1.5 w-1.5 rounded-full", persistentBrowser ? "bg-amber-500" : "bg-text-muted")} />
+                            <span>Persistent Session</span>
+                          </div>
+                          <span className={cn("text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded", persistentBrowser ? "bg-amber-500/20 text-amber-400" : "bg-bg-tertiary text-text-muted")}>
+                            {persistentBrowser ? "ON" : "OFF"}
+                          </span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
