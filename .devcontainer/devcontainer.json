@@ -1,24 +1,19 @@
 {
   "name": "Kyro Chat Dev",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
   "features": {
     "ghcr.io/devcontainers/features/postgresql:1": {
       "version": "16"
     },
-    "ghcr.io/devcontainers/features/redis:1": {}
+    "ghcr.io/devcontainers/features/redis:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "forwardPorts": [3000, 3001],
   "portsAttributes": {
     "3000": { "label": "Web UI", "onAutoForward": "openBrowser" },
     "3001": { "label": "API", "onAutoForward": "silent" }
-  },
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode"
-      ]
-    }
   }
 }
