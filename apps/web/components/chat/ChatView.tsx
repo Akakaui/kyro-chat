@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useCallback } from "react"
-import { Layers, Square, Wrench, Globe } from "lucide-react"
+import { Layers, Square, Wrench, Globe, Code2, BarChart2, Sparkles } from "lucide-react"
 import { useChatStore } from "@/stores/chat"
 import { useCreateConversation, useMessages } from "@/lib/hooks"
 import { sendMessageStream, type ToolUse } from "@/lib/api"
@@ -11,6 +11,7 @@ import { PermissionPrompt, type PermissionRequest } from "./PermissionPrompt"
 import { QuestionForm } from "./QuestionForm"
 import { TaskBadge, type TaskInfo } from "./TaskBadge"
 import { BrowserOverlay } from "../browser/BrowserOverlay"
+import { IncognitoToggle } from "./IncognitoToggle"
 
 export function ChatView() {
   const {
@@ -37,6 +38,8 @@ export function ChatView() {
     humanUsingBrowser,
     agentStatus,
     setAgentStatus,
+    panelOpen,
+    setPanelOpen,
   } = useChatStore()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -581,7 +584,95 @@ export function ChatView() {
   }, [tasks])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" style={{ background: "#121212" }}>
+      {/* Top nav bar */}
+      <div
+        style={{
+          height: "52px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 16px",
+          borderBottom: "1px solid #1e1e1e",
+          flexShrink: 0,
+        }}
+      >
+        {/* Left: sidebar toggle + title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {!panelOpen && (
+            <button
+              onClick={() => setPanelOpen(true)}
+              title="Open sidebar"
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "9px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "transparent",
+                border: "1px solid #22222a",
+                color: "#9ca3af",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLButtonElement
+                el.style.background = "#1e1e24"
+                el.style.color = "#f3f4f6"
+                el.style.borderColor = "#33333f"
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLButtonElement
+                el.style.background = "transparent"
+                el.style.color = "#9ca3af"
+                el.style.borderColor = "#22222a"
+              }}
+            >
+              <Layers size={16} />
+            </button>
+          )}
+
+          {/* Show "Kyro" brand only when sidebar is closed */}
+          {!panelOpen && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "7px",
+                  background: "linear-gradient(135deg, #1a1400 0%, #2d1f00 100%)",
+                  border: "1px solid rgba(217,119,6,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  K
+                </span>
+              </div>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "#ececec" }}>Kyro AI</span>
+            </div>
+          )}
+        </div>
+
+        {/* Right: incognito + model info */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <IncognitoToggle />
+        </div>
+      </div>
+
       {/* Messages area — bottom padding accounts for fixed input on mobile */}
       <div className="flex-1 overflow-y-auto pb-[140px] sm:pb-0">
         <div className="mx-auto max-w-3xl">
@@ -605,6 +696,7 @@ export function ChatView() {
           )}
         </div>
       </div>
+
 
       {/* Permission prompts — inline above input */}
       {pendingPermissions.length > 0 && (
@@ -727,30 +819,164 @@ function StreamingIndicator({ messages }: { messages: any[] }) {
 }
 
 function EmptyState() {
+  const suggestions = [
+    { label: "Search the web", icon: <Globe size={14} /> },
+    { label: "Write code", icon: <Code2 size={14} /> },
+    { label: "Analyze data", icon: <BarChart2 size={14} /> },
+    { label: "Create artifact", icon: <Sparkles size={14} /> },
+  ]
+
   return (
-    <div className="flex h-full min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-cyan">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z" />
-          <path d="M12 6v6l4 2" />
-        </svg>
-      </div>
-      <h2 className="mb-2 text-xl font-semibold text-text-primary">
-        What can I help with?
-      </h2>
-      <p className="max-w-sm text-sm text-text-secondary">
-        Ask me anything. I can search the web, write code, analyze data, and create artifacts.
-      </p>
-      <div className="mt-6 flex gap-2">
-        {["Search the web", "Write code", "Analyze data"].map((suggestion) => (
-          <button
-            key={suggestion}
-            className="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs text-text-secondary transition-colors hover:border-accent hover:text-accent"
+    <div
+      className="relative flex h-full min-h-[70vh] flex-col items-center justify-center px-6 text-center overflow-hidden"
+    >
+      {/* Ambient background glow */}
+      <div
+        style={{
+          position: "absolute",
+          top: "20%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "600px",
+          height: "400px",
+          background: "radial-gradient(ellipse at center, rgba(217,119,6,0.06) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Logo / Avatar */}
+      <div
+        style={{
+          position: "relative",
+          marginBottom: "2rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {/* Outer ring */}
+        <div
+          style={{
+            position: "absolute",
+            width: "88px",
+            height: "88px",
+            borderRadius: "50%",
+            border: "1px solid rgba(217,119,6,0.25)",
+            animation: "spin 8s linear infinite",
+          }}
+        />
+        {/* Inner logo box */}
+        <div
+          style={{
+            width: "72px",
+            height: "72px",
+            borderRadius: "20px",
+            background: "linear-gradient(135deg, #1a1400 0%, #2d1f00 50%, #1a1400 100%)",
+            border: "1px solid rgba(217,119,6,0.3)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 0 40px rgba(217,119,6,0.15), inset 0 1px 0 rgba(255,255,255,0.05)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "28px",
+              fontWeight: 800,
+              background: "linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #92400e 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              letterSpacing: "-1px",
+            }}
           >
-            {suggestion}
+            K
+          </span>
+        </div>
+      </div>
+
+      {/* Heading */}
+      <h1
+        style={{
+          fontSize: "2rem",
+          fontWeight: 700,
+          marginBottom: "0.75rem",
+          background: "linear-gradient(135deg, #ececec 0%, #a3a3a3 100%)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          backgroundClip: "text",
+          letterSpacing: "-0.02em",
+          lineHeight: 1.1,
+        }}
+      >
+        What can I help with today?
+      </h1>
+
+      <p
+        style={{
+          maxWidth: "380px",
+          fontSize: "0.9rem",
+          color: "#737373",
+          lineHeight: 1.6,
+          marginBottom: "2.5rem",
+        }}
+      >
+        Ask me anything — I can search the web, write and run code, analyze data, and create rich artifacts.
+      </p>
+
+      {/* Suggestion pills */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.625rem",
+          justifyContent: "center",
+          maxWidth: "440px",
+        }}
+      >
+        {suggestions.map((s) => (
+          <button
+            key={s.label}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.5rem 1rem",
+              borderRadius: "100px",
+              border: "1px solid #2a2a2a",
+              background: "#181818",
+              color: "#a3a3a3",
+              fontSize: "0.8rem",
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLButtonElement
+              el.style.borderColor = "rgba(217,119,6,0.5)"
+              el.style.color = "#d97706"
+              el.style.background = "rgba(217,119,6,0.06)"
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLButtonElement
+              el.style.borderColor = "#2a2a2a"
+              el.style.color = "#a3a3a3"
+              el.style.background = "#181818"
+            }}
+          >
+            <span>{s.icon}</span>
+            <span>{s.label}</span>
           </button>
         ))}
       </div>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }
+

@@ -17,6 +17,7 @@ import {
   Globe,
   Search,
   Brain,
+  ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useChatStore } from "@/stores/chat"
@@ -352,8 +353,15 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
   }
 
   return (
-    <div className="border-t border-border bg-bg-primary px-3 py-3 safe-area-inset-bottom md:px-4">
-      <div className="mx-auto max-w-3xl">
+    <div
+      style={{
+        background: "#121212",
+        borderTop: "1px solid #1e1e1e",
+        padding: "12px 16px 16px",
+      }}
+      className="safe-area-inset-bottom"
+    >
+      <div style={{ maxWidth: "768px", margin: "0 auto" }}>
         <div className="relative">
           <input
             ref={fileInputRef}
@@ -393,242 +401,54 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
               {attachedFiles.map((file, i) => (
                 <div
                   key={`${file.name}-${i}`}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-bg-tertiary px-2.5 py-1.5 text-xs"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "5px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #2a2a2a",
+                    background: "#1e1e1e",
+                    flexShrink: 0,
+                    fontSize: "12px",
+                  }}
                 >
                   {file.preview ? (
-                    <img src={file.preview} alt={file.name} className="h-5 w-5 shrink-0 rounded object-cover" />
+                    <img src={file.preview} alt={file.name} style={{ width: "18px", height: "18px", borderRadius: "4px", objectFit: "cover" }} />
                   ) : (
-                    <FileText size={14} className="shrink-0 text-text-muted" />
+                    <FileText size={13} style={{ color: "#737373", flexShrink: 0 }} />
                   )}
-                  <span className="max-w-[120px] truncate text-text-secondary">{file.name}</span>
-                  <span className="text-text-muted">{formatFileSize(file.size)}</span>
+                  <span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#a3a3a3" }}>{file.name}</span>
+                  <span style={{ color: "#4a4a4a" }}>{formatFileSize(file.size)}</span>
                   <button
                     onClick={() => onRemoveFile?.(i)}
-                    className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+                    style={{ color: "#737373", background: "none", border: "none", cursor: "pointer", padding: "0 0 0 2px", display: "flex" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#ef4444" }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#737373" }}
                   >
-                    <X size={12} />
+                    <X size={11} />
                   </button>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Task badge — shows task progress during streaming */}
+          {/* Task badge */}
           {taskBadge && <div className="mb-2">{taskBadge}</div>}
 
-          {/* Input bar */}
-          <div className="flex items-end gap-1.5 rounded-2xl border border-border bg-bg-secondary p-2 md:gap-2">
-            {/* Plus button — menu for files + attachments */}
-            <div className="relative">
-              <button
-                onClick={() => setShowPlusMenu(!showPlusMenu)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-              >
-                <Plus size={20} className={cn("transition-transform duration-200", showPlusMenu && "rotate-45")} />
-              </button>
-
-              {showPlusMenu && (
-                <div className="context-menu absolute bottom-full left-0 mb-2 w-48 overflow-hidden rounded-xl border border-border bg-bg-secondary shadow-xl">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                  >
-                    <Image size={20} className="text-cyan" />
-                    Upload image
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (fileInputRef.current) {
-                        fileInputRef.current.accept = ".pdf,.doc,.docx,.txt,.md,.json,.csv,.xlsx"
-                        fileInputRef.current.click()
-                      }
-                    }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                  >
-                    <FileText size={20} className="text-purple" />
-                    Upload file
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAddToChatOverlayOpen(true)
-                      setShowPlusMenu(false)
-                    }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                  >
-                    <Plus size={20} className="text-accent" />
-                    Add knowledge base
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Model selector pill */}
-            <button
-              onClick={() => setModelSelectorOpen(true)}
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-text-muted hover:text-text-primary"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
-              <span className="hidden sm:inline">{selectedModel.name}</span>
-              <span className="sm:hidden text-[10px]">Model</span>
-            </button>
-
-            {/* Browser / Search / RAG toggles */}
-            <div className="hidden shrink-0 overflow-hidden rounded-full border border-border bg-bg-tertiary sm:flex">
-              <button
-                onClick={toggleBrowserEnabled}
-                title={browserEnabled ? "Browser: ON" : "Browser: OFF"}
-                className={cn(
-                  "flex items-center gap-1 px-2 py-1.5 text-xs font-medium transition-colors",
-                  browserEnabled
-                    ? "bg-accent text-white"
-                    : "text-text-secondary hover:text-text-primary"
-                )}
-              >
-                <Globe size={14} />
-              </button>
-              <button
-                onClick={toggleWebSearch}
-                title={settings.capabilities.web_search ? "Web Search: ON" : "Web Search: OFF"}
-                className={cn(
-                  "flex items-center gap-1 px-2 py-1.5 text-xs font-medium transition-colors",
-                  settings.capabilities.web_search
-                    ? "bg-accent text-white"
-                    : "text-text-secondary hover:text-text-primary"
-                )}
-              >
-                <Search size={14} />
-              </button>
-
-            </div>
-
-            {/* Act / Build mode switcher — hidden on mobile, shown on tablet+ */}
-            <div className="hidden shrink-0 overflow-hidden rounded-full border border-border bg-bg-tertiary sm:flex">
-              <button
-                onClick={() => setChatMode("act")}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  chatMode === "act"
-                    ? "bg-accent text-white"
-                    : "text-text-secondary hover:text-text-primary"
-                )}
-              >
-                <Wrench size={14} />
-                Act
-              </button>
-              <button
-                onClick={() => setChatMode("build")}
-                className={cn(
-                  "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  chatMode === "build"
-                    ? "bg-accent text-white"
-                    : "text-text-secondary hover:text-text-primary"
-                )}
-              >
-                <Hammer size={14} />
-                Build
-              </button>
-            </div>
-
-            {/* Accept All permissions — hidden on mobile */}
-            <button
-              onClick={toggleAcceptAll}
-              title={acceptAll ? "Accept all permissions: ON" : "Accept all permissions: OFF"}
-              className={cn(
-                "hidden shrink-0 items-center justify-center rounded-lg transition-colors sm:flex h-8 w-8",
-                acceptAll
-                  ? "bg-success/15 text-success"
-                  : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-              )}
-            >
-              {acceptAll ? <ShieldCheck size={20} /> : <Shield size={20} />}
-            </button>
-
-            {/* Mobile secondary menu (…) — shows Act/Build + permissions on small screens */}
-            <div className="relative sm:hidden">
-              <button
-                onClick={() => setShowSecondaryMenu(!showSecondaryMenu)}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                aria-label="More options"
-              >
-                <MoreHorizontal size={20} />
-              </button>
-
-              {showSecondaryMenu && (
-                <div className="context-menu absolute bottom-full right-0 mb-2 w-48 overflow-hidden rounded-xl border border-border bg-bg-secondary shadow-xl">
-                  {/* Act/Build mode */}
-                  <div className="flex border-b border-border">
-                    <button
-                      onClick={() => { setChatMode("act"); setShowSecondaryMenu(false) }}
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
-                        chatMode === "act"
-                          ? "bg-accent text-white"
-                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-                      )}
-                    >
-                      <Wrench size={14} />
-                      Act
-                    </button>
-                    <button
-                      onClick={() => { setChatMode("build"); setShowSecondaryMenu(false) }}
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
-                        chatMode === "build"
-                          ? "bg-accent text-white"
-                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-                      )}
-                    >
-                      <Hammer size={14} />
-                      Build
-                    </button>
-                  </div>
-
-                  {/* Browser / Search / RAG toggles */}
-                  <div className="flex border-b border-border">
-                    <button
-                      onClick={() => { toggleBrowserEnabled() }}
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
-                        browserEnabled
-                          ? "bg-accent text-white"
-                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-                      )}
-                    >
-                      <Globe size={14} />
-                      Browser
-                    </button>
-                    <button
-                      onClick={() => { toggleWebSearch() }}
-                      className={cn(
-                        "flex flex-1 items-center justify-center gap-1 px-3 py-2.5 text-xs font-medium transition-colors",
-                        settings.capabilities.web_search
-                          ? "bg-accent text-white"
-                          : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-                      )}
-                    >
-                      <Search size={14} />
-                      Search
-                    </button>
-
-                  </div>
-
-                  {/* Accept All toggle */}
-                  <button
-                    onClick={() => { toggleAcceptAll(); setShowSecondaryMenu(false) }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                  >
-                    {acceptAll ? (
-                      <ShieldCheck size={18} className="text-success" />
-                    ) : (
-                      <Shield size={18} />
-                    )}
-                    {acceptAll ? "Permissions: ON" : "Permissions: OFF"}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Text input */}
+          {/* Input bar — glassy premium multi-row container */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              borderRadius: "18px",
+              border: "1px solid #2a2a2a",
+              background: "#181818",
+              padding: "10px 12px 8px 12px",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.03), 0 4px 24px rgba(0,0,0,0.4)",
+            }}
+          >
+            {/* Top row: Text input */}
             <textarea
               ref={textareaRef}
               value={value}
@@ -636,28 +456,261 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
               onKeyDown={handleKeyDown}
               placeholder="Ask anything..."
               rows={1}
-              className="max-h-[200px] min-h-[36px] flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              style={{
+                width: "100%",
+                resize: "none",
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                padding: "2px 0 8px 0",
+                fontSize: "14px",
+                lineHeight: "1.5",
+                color: "#ececec",
+                maxHeight: "200px",
+                minHeight: "44px",
+                fontFamily: "inherit",
+              }}
             />
 
-            {/* Mic button */}
-            <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary">
-              <Mic size={20} />
-            </button>
-
-            {/* Send button */}
-            <Button
-              onClick={handleSubmit}
-              disabled={!value.trim() || isStreaming}
-              size="icon"
-              className={cn(
-                "h-8 w-8 shrink-0 rounded-lg",
-                value.trim() && !isStreaming
-                  ? "bg-accent text-white hover:bg-accent-hover"
-                  : "bg-bg-tertiary text-text-muted"
-              )}
+            {/* Bottom toolbar */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: "6px",
+                borderTop: "1px solid rgba(255,255,255,0.04)",
+              }}
             >
-              {isStreaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            </Button>
+              {/* Left controls */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {/* Plus button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowPlusMenu(!showPlusMenu)}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      borderRadius: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#a3a3a3",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement
+                      el.style.background = "#222"
+                      el.style.color = "#ececec"
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement
+                      el.style.background = "transparent"
+                      el.style.color = "#a3a3a3"
+                    }}
+                  >
+                    <Plus size={18} className={cn("transition-transform duration-200", showPlusMenu && "rotate-45")} />
+                  </button>
+
+                  {showPlusMenu && (
+                    <div className="context-menu absolute bottom-full left-0 mb-2 w-56 overflow-hidden rounded-xl border border-border bg-bg-secondary p-1 shadow-xl z-50">
+                      <button
+                        onClick={() => {
+                          if (fileInputRef.current) {
+                            fileInputRef.current.accept = "*/*"
+                            fileInputRef.current.click()
+                          }
+                          setShowPlusMenu(false)
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                      >
+                        <FileText size={16} className="text-accent" />
+                        Add files or photos
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowSlashMenu(true)
+                          setSlashFilter("skill")
+                          setShowPlusMenu(false)
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                      >
+                        <Wrench size={16} className="text-warning" />
+                        Quick access to Skills
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAddToChatOverlayOpen(true)
+                          setShowPlusMenu(false)
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                      >
+                        <Plus size={16} className="text-cyan" />
+                        Add conversation to Project
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowMentionPopup(true)
+                          setMentionFilter("mcp:")
+                          setShowPlusMenu(false)
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                      >
+                        <Hammer size={16} className="text-success" />
+                        Connectors & MCP
+                      </button>
+                      <div className="my-1 border-t border-border" />
+                      <button
+                        onClick={() => {
+                          toggleWebSearch()
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Globe size={16} className={settings.capabilities.web_search ? "text-success" : "text-text-muted"} />
+                          <span>Web Search</span>
+                        </div>
+                        <span className={cn("text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded", settings.capabilities.web_search ? "bg-success/20 text-success" : "bg-bg-tertiary text-text-muted")}>
+                          {settings.capabilities.web_search ? "ON" : "OFF"}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Model selector pill */}
+                <button
+                  onClick={() => setModelSelectorOpen(true)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    borderRadius: "100px",
+                    border: "1px solid #2a2a2a",
+                    background: "#161616",
+                    padding: "4px 10px",
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    color: "#a3a3a3",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget as HTMLButtonElement
+                    el.style.borderColor = "rgba(217,119,6,0.4)"
+                    el.style.color = "#d97706"
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget as HTMLButtonElement
+                    el.style.borderColor = "#2a2a2a"
+                    el.style.color = "#a3a3a3"
+                  }}
+                >
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e" }} />
+                  <span>{selectedModel.name}</span>
+                  <ChevronDown size={12} style={{ color: "#737373" }} />
+                </button>
+
+                {/* Act / Plan mode switcher */}
+                <div
+                  style={{
+                    display: "flex",
+                    borderRadius: "100px",
+                    border: "1px solid #2a2a2a",
+                    background: "#161616",
+                    padding: "2px",
+                  }}
+                >
+                  <button
+                    onClick={() => setChatMode("act")}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "3px 9px",
+                      borderRadius: "100px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      background: chatMode === "act" ? "#d97706" : "transparent",
+                      color: chatMode === "act" ? "#ffffff" : "#737373",
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Wrench size={11} />
+                    Act
+                  </button>
+                  <button
+                    onClick={() => setChatMode("build")}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "3px 9px",
+                      borderRadius: "100px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      background: chatMode === "build" ? "#d97706" : "transparent",
+                      color: chatMode === "build" ? "#ffffff" : "#737373",
+                      border: "none",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <Hammer size={11} />
+                    Plan
+                  </button>
+                </div>
+              </div>
+
+              {/* Right controls */}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                {/* Mic button */}
+                <button
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    borderRadius: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#737373",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Mic size={16} />
+                </button>
+
+                {/* Send button */}
+                <button
+                  onClick={handleSubmit}
+                  disabled={!value.trim() || isStreaming}
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: value.trim() && !isStreaming
+                      ? "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
+                      : "#262626",
+                    border: "none",
+                    color: value.trim() && !isStreaming ? "#ffffff" : "#525252",
+                    cursor: value.trim() && !isStreaming ? "pointer" : "not-allowed",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {isStreaming ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={14} />}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

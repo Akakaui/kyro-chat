@@ -4,7 +4,7 @@ import { getDb } from '../db/init.js';
 export const settingsRoutes = new Hono();
 
 // Helper to get or set a user setting
-function getSetting(userId: string, key: string): string | null {
+async function getSetting(userId: string, key: string): Promise<string | null> {
   const db = getDb();
   const row = await db.prepare(`
     SELECT value FROM user_settings WHERE user_id = ? AND key = ?
@@ -12,7 +12,7 @@ function getSetting(userId: string, key: string): string | null {
   return row?.value ?? null;
 }
 
-function setSetting(userId: string, key: string, value: string): void {
+async function setSetting(userId: string, key: string, value: string): Promise<void> {
   const db = getDb();
   const id = crypto.randomUUID();
   await db.prepare(`
@@ -69,7 +69,7 @@ settingsRoutes.put('/', async (c) => {
       return c.json({ error: `Setting "${key}" must be a boolean` }, 400);
     }
 
-    setSetting(user.id, key, value ? 'true' : 'false');
+    await setSetting(user.id, key, value ? 'true' : 'false');
     applied[key] = value;
   }
 

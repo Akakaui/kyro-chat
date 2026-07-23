@@ -34,13 +34,15 @@ export function ModelSelector() {
     try {
       setLoading(true)
       const data = await fetchModels()
-      setModels(data.models)
-      setWindow(data.window)
+      const modelList = data?.models ?? []
+      setModels(modelList)
+      setWindow(data?.window ?? null)
       // Auto-expand the selected model's provider
-      const sel = data.models.find((m) => m.id === selectedModel.id)
+      const sel = modelList.find((m) => m.id === selectedModel.id)
       if (sel) setExpandedProvider(sel.provider)
     } catch (err) {
       console.error("Failed to load models:", err)
+      setModels([])
     } finally {
       setLoading(false)
     }
@@ -67,7 +69,7 @@ export function ModelSelector() {
   if (!modelSelectorOpen) return null
 
   // Group models by provider
-  const modelsByProvider = models.reduce((acc, model) => {
+  const modelsByProvider = (models ?? []).reduce((acc, model) => {
     if (!acc[model.provider]) acc[model.provider] = []
     acc[model.provider].push(model)
     return acc
@@ -117,6 +119,20 @@ export function ModelSelector() {
             className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
           >
             <X size={16} />
+          </button>
+        </div>
+
+        {/* Quick action: Add Provider link */}
+        <div className="border-b border-border px-3 py-2">
+          <button
+            onClick={() => {
+              setModelSelectorOpen(false)
+              window.location.hash = "#settings-providers"
+            }}
+            className="flex w-full items-center gap-2 rounded-xl bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/20"
+          >
+            <span>+ Add new provider</span>
+            <span className="ml-auto text-[10px] opacity-75">Configure API Keys &rarr;</span>
           </button>
         </div>
 

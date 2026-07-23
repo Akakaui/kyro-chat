@@ -33,10 +33,10 @@ class SchedulerService {
   /**
    * Create a scheduled task
    */
-  create(
+  async create(
     userId: string,
     task: Omit<ScheduledTask, 'id' | 'userId' | 'status' | 'createdAt'>
-  ): string {
+  ): Promise<string> {
     const db = getDb();
     const id = crypto.randomUUID();
 
@@ -69,7 +69,7 @@ class SchedulerService {
   /**
    * Get task by ID
    */
-  get(id: string, userId: string): ScheduledTask | null {
+  async get(id: string, userId: string): Promise<ScheduledTask | null> {
     const db = getDb();
     const task = await db.prepare(`
       SELECT * FROM scheduled_tasks WHERE id = ? AND user_id = ?
@@ -82,7 +82,7 @@ class SchedulerService {
   /**
    * List user's tasks
    */
-  list(userId: string): ScheduledTask[] {
+  async list(userId: string): Promise<ScheduledTask[]> {
     const db = getDb();
     const tasks = await db.prepare(`
       SELECT * FROM scheduled_tasks
@@ -96,7 +96,7 @@ class SchedulerService {
   /**
    * List tasks for a project
    */
-  listByProject(userId: string, projectId: string): ScheduledTask[] {
+  async listByProject(userId: string, projectId: string): Promise<ScheduledTask[]> {
     const db = getDb();
     const tasks = await db.prepare(`
       SELECT * FROM scheduled_tasks
@@ -110,11 +110,11 @@ class SchedulerService {
   /**
    * Update a task
    */
-  update(
+  async update(
     id: string,
     userId: string,
     updates: Partial<Pick<ScheduledTask, 'name' | 'description' | 'cronExpression' | 'agentId' | 'projectId' | 'permissionOverride' | 'emailNotification' | 'payload'>>
-  ): boolean {
+  ): Promise<boolean> {
     const db = getDb();
     const task = this.get(id, userId);
     if (!task) return false;
@@ -174,7 +174,7 @@ class SchedulerService {
   /**
    * Cancel a task
    */
-  cancel(id: string, userId: string): boolean {
+  async cancel(id: string, userId: string): Promise<boolean> {
     const db = getDb();
     const result = await db.prepare(`
       UPDATE scheduled_tasks
@@ -194,7 +194,7 @@ class SchedulerService {
   /**
    * Delete a task
    */
-  delete(id: string, userId: string): boolean {
+  async delete(id: string, userId: string): Promise<boolean> {
     this.cancel(id, userId);
 
     const db = getDb();
@@ -269,7 +269,7 @@ class SchedulerService {
   /**
    * Start the scheduler
    */
-  start(): void {
+  async start(): Promise<void> {
     if (this.isRunning) return;
     this.isRunning = true;
 

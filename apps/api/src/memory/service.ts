@@ -17,7 +17,7 @@ class MemoryService {
   /**
    * Store a memory entry
    */
-  store(
+  async store(
     userId: string,
     content: string,
     type: MemoryEntry['type'] = 'fact',
@@ -26,7 +26,7 @@ class MemoryService {
       metadata?: Record<string, any>;
       importance?: number;
     } = {}
-  ): string {
+  ): Promise<string> {
     const db = getDb();
     const id = crypto.randomUUID();
 
@@ -49,7 +49,7 @@ class MemoryService {
   /**
    * Search memories by content
    */
-  search(
+  async search(
     userId: string,
     query: string,
     options: {
@@ -58,7 +58,7 @@ class MemoryService {
       limit?: number;
       minImportance?: number;
     } = {}
-  ): MemoryEntry[] {
+  ): Promise<MemoryEntry[]> {
     const db = getDb();
     const { agentId, type, limit = 10, minImportance = 1 } = options;
 
@@ -110,13 +110,13 @@ class MemoryService {
   /**
    * Get recent memories
    */
-  getRecent(
+  async getRecent(
     userId: string,
     options: {
       agentId?: string;
       limit?: number;
     } = {}
-  ): MemoryEntry[] {
+  ): Promise<MemoryEntry[]> {
     const db = getDb();
     const { agentId, limit = 20 } = options;
 
@@ -153,8 +153,8 @@ class MemoryService {
   /**
    * Get memory context for agent
    */
-  getContext(userId: string, agentId?: string, maxTokens: number = 2000): string {
-    const memories = this.getRecent(userId, { agentId, limit: 50 });
+  async getContext(userId: string, agentId?: string, maxTokens: number = 2000): Promise<string> {
+    const memories = await this.getRecent(userId, { agentId, limit: 50 });
 
     if (memories.length === 0) return '';
 
@@ -179,11 +179,11 @@ class MemoryService {
   /**
    * Update memory
    */
-  update(
+  async update(
     id: string,
     userId: string,
     updates: Partial<Pick<MemoryEntry, 'content' | 'importance' | 'type'>>
-  ): boolean {
+  ): Promise<boolean> {
     const db = getDb();
     const result = await db.prepare(`
       UPDATE memory_entries
@@ -205,7 +205,7 @@ class MemoryService {
   /**
    * Delete memory
    */
-  delete(id: string, userId: string): boolean {
+  async delete(id: string, userId: string): Promise<boolean> {
     const db = getDb();
     const result = await db.prepare(`
       DELETE FROM memory_entries WHERE id = ? AND user_id = ?
@@ -217,7 +217,7 @@ class MemoryService {
   /**
    * Clear old/low-importance memories
    */
-  cleanup(userId: string, maxAge: number = 30 * 24 * 60 * 60 * 1000): number {
+  async cleanup(userId: string, maxAge: number = 30 * 24 * 60 * 60 * 1000): Promise<number> {
     const db = getDb();
     const cutoff = Math.floor((Date.now() - maxAge) / 1000);
 

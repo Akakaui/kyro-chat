@@ -182,7 +182,7 @@ export async function generateImage(
 }
 
 // ── Get a generated image by ID ──
-export function getImageById(imageId: string, userId: string): any | null {
+export async function getImageById(imageId: string, userId: string): Promise<any | null> {
   const db = getDb();
   return await db.prepare(`
     SELECT id, user_id, provider, model, prompt, url, size, revised_prompt, created_at

@@ -27,8 +27,10 @@ export function IncognitoToggle() {
           <EyeOff size={16} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom">
-        {incognito ? "Incognito mode on" : "Turn on incognito mode"}
+      <TooltipContent side="bottom" className="max-w-xs text-xs">
+        {incognito
+          ? "Incognito Mode ON — Transient chat (shareable via URL, not saved to history or memory)"
+          : "Enable Incognito Mode (Transient, shareable chat without saving to history)"}
       </TooltipContent>
     </Tooltip>
   )

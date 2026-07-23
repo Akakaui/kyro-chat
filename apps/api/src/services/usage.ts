@@ -1,7 +1,7 @@
 import { getDb } from '../db/init.js';
 
 // ── Get user's usage for current period ──
-export function getUsage(userId: string) {
+export async function getUsage(userId: string) {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
   const dayStart = now - (now % 86400);
@@ -27,7 +27,7 @@ export function getUsage(userId: string) {
 }
 
 // ── Increment usage counter ──
-export function trackUsage(userId: string, metric: string, count: number = 1): void {
+export async function trackUsage(userId: string, metric: string, count: number = 1): Promise<void> {
   const db = getDb();
   const now = Math.floor(Date.now() / 1000);
   const dayStart = now - (now % 86400);

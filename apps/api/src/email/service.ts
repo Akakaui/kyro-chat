@@ -133,7 +133,7 @@ class EmailService {
   /**
    * Get user's email settings
    */
-  getSettings(userId: string): EmailSettings {
+  async getSettings(userId: string): Promise<EmailSettings> {
     const db = getDb();
     const profile = await db.prepare(`
       SELECT email_address, agent_display_name, email_notifications
@@ -152,9 +152,9 @@ class EmailService {
   /**
    * Update user's email settings
    */
-  updateSettings(userId: string, settings: Partial<EmailSettings>): EmailSettings {
+  async updateSettings(userId: string, settings: Partial<EmailSettings>): Promise<EmailSettings> {
     const db = getDb();
-    const current = this.getSettings(userId);
+    const current = await this.getSettings(userId);
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -197,7 +197,7 @@ class EmailService {
     }
 
     const fromEmail = getAgentEmail(agentId);
-    const settings = this.getSettings(this.userId);
+    const settings = await this.getSettings(this.userId);
     const fromName = settings.agentDisplayName;
 
     const result = await this.transporter.sendMail({
@@ -219,7 +219,7 @@ class EmailService {
     result: string,
     conversationId?: string
   ): Promise<void> {
-    const settings = this.getSettings(this.userId);
+    const settings = await this.getSettings(this.userId);
     if (!settings.userEmail || !settings.notifications.taskComplete) return;
 
     const subject = `Task Complete: ${taskName}`;
@@ -248,7 +248,7 @@ class EmailService {
     taskName: string,
     result: string
   ): Promise<void> {
-    const settings = this.getSettings(this.userId);
+    const settings = await this.getSettings(this.userId);
     if (!settings.userEmail || !settings.notifications.scheduledDone) return;
 
     const subject = `Scheduled Task Done: ${taskName}`;
@@ -275,7 +275,7 @@ class EmailService {
     title: string,
     details: string
   ): Promise<void> {
-    const settings = this.getSettings(this.userId);
+    const settings = await this.getSettings(this.userId);
     if (!settings.userEmail || !settings.notifications.actionRequired) return;
 
     const subject = `Action Required: ${title}`;

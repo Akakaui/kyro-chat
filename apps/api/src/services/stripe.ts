@@ -128,7 +128,7 @@ export async function createPortalSession(customerId: string): Promise<{ url: st
 }
 
 // ── Get user's subscription ──
-export function getSubscription(userId: string) {
+export async function getSubscription(userId: string) {
   const db = getDb();
   const sub = await db.prepare(`
     SELECT id, user_id, stripe_customer_id, stripe_subscription_id, plan, status,

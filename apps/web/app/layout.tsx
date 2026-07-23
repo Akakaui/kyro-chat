@@ -4,12 +4,14 @@ import "../styles/globals.css"
 
 const inter = Inter({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-inter",
+  display: "swap",
 })
 
 export const metadata: Metadata = {
-  title: "Kyro Chat",
-  description: "AI-powered chat with agentic capabilities",
+  title: "Kyro",
+  description: "AI-powered agentic assistant",
   manifest: "/manifest.json",
 }
 
@@ -27,12 +29,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" style={{ background: "#121212" }}>
       <body
-        className={`${inter.variable} font-sans bg-bg-primary text-text-primary antialiased`}
+        className={`${inter.variable} ${inter.className} antialiased`}
+        style={{ background: "#121212", color: "#ececec", height: "100%" }}
       >
         {children}
       </body>
     </html>
   )
 }
+

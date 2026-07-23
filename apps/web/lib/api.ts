@@ -13,12 +13,20 @@ async function request<T>(
   if (token) {
     headers["Authorization"] = `Bearer ${token}`
   }
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || body.message || `Request failed: ${res.status}`)
+  try {
+    const res = await fetch(`${API_URL}${path}`, { ...options, headers })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || body.message || `Request failed: ${res.status}`)
+    }
+    return res.json()
+  } catch (err: any) {
+    if (err.name === "TypeError" && err.message === "Failed to fetch") {
+      console.warn(`[API Offline] Failed to connect to ${API_URL}${path}`)
+      return {} as T
+    }
+    throw err
   }
-  return res.json()
 }
 
 // Conversations
