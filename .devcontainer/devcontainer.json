@@ -1,0 +1,25 @@
+{
+  "name": "Kyro Chat Dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/postgresql:1": {
+      "version": "16",
+      "postCreateCommand": "sudo -u postgres psql -c \"ALTER USER postgres PASSWORD 'password';\" && sudo -u postgres psql -c \"CREATE DATABASE chatbot;\" && sudo -u postgres psql -d chatbot -c \"CREATE EXTENSION IF NOT EXISTS vector;\""
+    },
+    "ghcr.io/devcontainers/features/redis:1": {}
+  },
+  "postCreateCommand": "npm install -g pnpm@latest && pnpm install && pnpm approve-builds --all",
+  "forwardPorts": [3000, 3001],
+  "portsAttributes": {
+    "3000": { "label": "Web UI", "onAutoForward": "openBrowser" },
+    "3001": { "label": "API", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
