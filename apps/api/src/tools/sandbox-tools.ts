@@ -17,7 +17,7 @@ export interface SandboxToolContext extends ToolContext {
 function requireSandbox(ctx: ToolContext): string {
   const sandboxId = (ctx as SandboxToolContext).sandboxId;
   if (!sandboxId) {
-    throw new Error('No sandbox available. Sandbox must be created before using tools.');
+    throw new Error('No sandbox available. E2B_API_KEY must be configured and sandbox creation must succeed.');
   }
   return sandboxId;
 }

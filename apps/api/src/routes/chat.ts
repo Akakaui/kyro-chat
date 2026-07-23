@@ -258,8 +258,8 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
     const session = await sandboxService.createSession(user.id, 'node');
     sandboxId = session.id;
   } catch (error) {
-    console.warn('Failed to create sandbox for conversation:', error);
-    // Continue without sandbox - tools will use built-in fallbacks
+    console.error('Failed to create sandbox for conversation:', error);
+    return c.json({ error: 'Sandbox is required but failed to initialize. Please check E2B_API_KEY is configured.' }, 503);
   }
 
   // Track files before agent execution for artifact capture

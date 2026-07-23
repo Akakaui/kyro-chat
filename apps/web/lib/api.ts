@@ -152,10 +152,10 @@ export async function listApiKeys() {
   return request<{ keys: ApiKey[] }>("/api/keys")
 }
 
-export async function createApiKey(provider: string, apiKey: string, name?: string) {
-  return request<{ id: string; provider: string; name: string }>("/api/keys", {
+export async function createApiKey(provider: string, apiKey: string, name?: string, baseURL?: string) {
+  return request<{ id: string; provider: string; name: string; baseURL?: string }>("/api/keys", {
     method: "POST",
-    body: JSON.stringify({ apiKey, name }),
+    body: JSON.stringify({ provider, apiKey, name, base_url: baseURL }),
   })
 }
 

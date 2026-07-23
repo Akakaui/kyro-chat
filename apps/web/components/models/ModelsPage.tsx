@@ -55,6 +55,7 @@ export function ModelsPage() {
   const [newKeyName, setNewKeyName] = useState("")
   const [newKeyValue, setNewKeyValue] = useState("")
   const [newKeyProvider, setNewKeyProvider] = useState<string>("openai")
+  const [newKeyBaseURL, setNewKeyBaseURL] = useState("")
   const [showKeyValue, setShowKeyValue] = useState<Record<string, boolean>>({})
   const [addKeyLoading, setAddKeyLoading] = useState(false)
   const [addKeyError, setAddKeyError] = useState("")
@@ -77,7 +78,12 @@ export function ModelsPage() {
     setAddKeyLoading(true)
     setAddKeyError("")
     try {
-      const result = await createApiKey(newKeyProvider, newKeyValue.trim(), newKeyName || `${newKeyProvider} key`)
+      const result = await createApiKey(
+        newKeyProvider,
+        newKeyValue.trim(),
+        newKeyName || `${newKeyProvider} key`,
+        newKeyBaseURL.trim() || undefined
+      )
       // Add created_at to match ApiKey interface
       const newKey: ApiKey = { ...result, created_at: Date.now() }
       setApiKeys((prev) => [...prev, newKey])
@@ -85,6 +91,7 @@ export function ModelsPage() {
       setNewKeyName("")
       setNewKeyValue("")
       setNewKeyProvider("openai")
+      setNewKeyBaseURL("")
       loadModels() // Refresh models after adding key
     } catch (err: unknown) {
       setAddKeyError(err instanceof Error ? err.message : "Failed to add API key")
@@ -104,11 +111,18 @@ export function ModelsPage() {
   }
 
   const PROVIDERS = [
-    { id: "openai", name: "OpenAI", placeholder: "sk-..." },
-    { id: "anthropic", name: "Anthropic", placeholder: "sk-ant-..." },
-    { id: "google", name: "Google (Gemini)", placeholder: "AI..." },
-    { id: "mistral", name: "Mistral", placeholder: "mist-..." },
-    { id: "groq", name: "Groq", placeholder: "gsk_..." },
+    { id: "openai", name: "OpenAI", placeholder: "sk-...", needsBaseURL: false },
+    { id: "anthropic", name: "Anthropic", placeholder: "sk-ant-...", needsBaseURL: false },
+    { id: "google", name: "Google (Gemini)", placeholder: "AI...", needsBaseURL: false },
+    { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-...", needsBaseURL: false },
+    { id: "deepseek", name: "DeepSeek", placeholder: "sk-...", needsBaseURL: false },
+    { id: "groq", name: "Groq", placeholder: "gsk_...", needsBaseURL: false },
+    { id: "together", name: "Together AI", placeholder: "...", needsBaseURL: false },
+    { id: "fireworks", name: "Fireworks AI", placeholder: "fw_...", needsBaseURL: false },
+    { id: "mistral", name: "Mistral", placeholder: "mist-...", needsBaseURL: false },
+    { id: "qwen", name: "Qwen (Alibaba)", placeholder: "sk-...", needsBaseURL: false },
+    { id: "ollama", name: "Ollama (Local)", placeholder: "ollama", needsBaseURL: true, defaultBaseURL: "http://localhost:11434/v1" },
+    { id: "custom", name: "Custom (OpenAI-compatible)", placeholder: "any key", needsBaseURL: true, defaultBaseURL: "https://your-api.com/v1" },
   ]
 
   const loadModels = useCallback(async () => {
@@ -404,7 +418,15 @@ export function ModelsPage() {
                 <label className="block text-xs text-text-muted mb-1">Provider</label>
                 <select
                   value={newKeyProvider}
-                  onChange={(e) => setNewKeyProvider(e.target.value)}
+                  onChange={(e) => {
+                    setNewKeyProvider(e.target.value)
+                    const p = PROVIDERS.find((p) => p.id === e.target.value)
+                    if (p?.needsBaseURL && p.defaultBaseURL) {
+                      setNewKeyBaseURL(p.defaultBaseURL)
+                    } else {
+                      setNewKeyBaseURL("")
+                    }
+                  }}
                   className="w-full px-3 py-2 text-sm bg-bg-primary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                 >
                   {PROVIDERS.map((p) => (
@@ -412,6 +434,21 @@ export function ModelsPage() {
                   ))}
                 </select>
               </div>
+              {PROVIDERS.find((p) => p.id === newKeyProvider)?.needsBaseURL && (
+                <div>
+                  <label className="block text-xs text-text-muted mb-1">Base URL</label>
+                  <input
+                    type="text"
+                    value={newKeyBaseURL}
+                    onChange={(e) => setNewKeyBaseURL(e.target.value)}
+                    placeholder={PROVIDERS.find((p) => p.id === newKeyProvider)?.defaultBaseURL}
+                    className="w-full px-3 py-2 text-sm bg-bg-primary border border-border rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent font-mono"
+                  />
+                  <p className="mt-1 text-[10px] text-text-muted">
+                    Must be an OpenAI-compatible endpoint (e.g. /v1)
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-text-muted mb-1">Name (optional)</label>
                 <input
