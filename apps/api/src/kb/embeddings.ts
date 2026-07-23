@@ -1,17 +1,21 @@
-import { pipeline, env } from '@xenova/transformers';
-
-// Disable model auto-downloading for first run
-env.allowLocalModels = false;
-env.useBrowserCache = false;
-
 let embeddingModel: any = null;
 
 /**
  * Get or initialize the embedding model (lazy loading)
+ * Uses dynamic import to avoid ONNX runtime crash at startup
  */
 async function getEmbeddingModel(): Promise<any> {
   if (!embeddingModel) {
-    embeddingModel = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    try {
+      const transformers = await import('@xenova/transformers');
+      transformers.env.allowLocalModels = false;
+      transformers.env.useBrowserCache = false;
+      _pipeline = transformers.pipeline;
+      embeddingModel = await transformers.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    } catch (err) {
+      console.warn('⚠️  Embeddings unavailable (ONNX runtime not supported on this platform):', (err as Error).message);
+      throw new Error('Embeddings not available on this platform');
+    }
   }
   return embeddingModel;
 }
