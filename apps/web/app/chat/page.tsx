@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TooltipProvider } from '../../components/ui/tooltip';
 import { ChatView } from '../../components/chat/ChatView';
 import { SettingsPanel } from '../../components/panels/SettingsPanel';
 import { ModelSelector } from '../../components/chat/ModelSelector';
@@ -26,6 +27,7 @@ import {
   createConversation as apiCreateConversation,
   deleteConversation as apiDeleteConversation,
   updateConversation as apiUpdateConversation,
+  getSettings,
 } from '../../lib/api';
 
 type Conversation = {
@@ -59,6 +61,7 @@ export default function ChatPage() {
   const [editTitle, setEditTitle] = useState('');
   const [chatFilter, setChatFilter] = useState<'all' | 'starred'>('all');
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [userName, setUserName] = useState('');
   const {
     activeConversation, setActiveConversation, settingsPanelOpen, setSettingsPanelOpen,
     modelSelectorOpen, setModelSelectorOpen, incognito, toggleIncognito,
@@ -67,6 +70,17 @@ export default function ChatPage() {
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchConversations(); }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await getSettings();
+        if (s?.full_name) setUserName(s.full_name);
+      } catch {
+        // ignore — fall back to placeholder
+      }
+    })();
+  }, []);
 
   // Close context menu on outside click
   useEffect(() => {
@@ -184,6 +198,7 @@ export default function ChatPage() {
 
   return (
     <QueryClientProvider client={queryClient}>
+    <TooltipProvider delayDuration={300}>
     <div className="flex h-screen bg-bg-primary">
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -415,15 +430,19 @@ export default function ChatPage() {
 
         {/* User section */}
         <div className="border-t border-border p-3">
-          <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-purple to-accent text-xs font-bold text-white">
-              F
+          <button
+            onClick={() => setSettingsPanelOpen(true)}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-hover"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
+              {(userName || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary truncate">Favour Chibuike</p>
-              <p className="text-[10px] text-text-muted truncate">Free Plan</p>
+              <p className="text-sm font-medium text-text-primary truncate">{userName || 'Your account'}</p>
+              <p className="text-[10px] text-text-muted truncate">Free plan · Manage</p>
             </div>
-          </div>
+            <Settings size={14} className="shrink-0 text-text-muted" />
+          </button>
         </div>
       </aside>
 
@@ -492,6 +511,7 @@ export default function ChatPage() {
       {/* Add to Chat overlay */}
       <AddToChatOverlay />
     </div>
+    </TooltipProvider>
     </QueryClientProvider>
   );
 }
