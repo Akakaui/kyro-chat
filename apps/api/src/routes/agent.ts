@@ -6,14 +6,14 @@ export const agentRoutes = new Hono();
 // Create agent
 agentRoutes.post('/', async (c) => {
   const user = c.get('user');
-  const { name, type, description, systemPrompt, model } = await c.req.json();
+  const { name, type, description, systemPrompt, model, toolPermissions } = await c.req.json();
   const id = crypto.randomUUID();
 
   const db = getDb();
   await db.prepare(`
-    INSERT INTO agents (id, user_id, name, type, description, system_prompt, model)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, user.id, name, type || 'sub', description || '', systemPrompt || '', model || 'claude-sonnet-4-20250514');
+    INSERT INTO agents (id, user_id, name, type, description, system_prompt, model, tool_permissions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, user.id, name, type || 'sub', description || '', systemPrompt || '', model || 'claude-sonnet-4-20250514', JSON.stringify(toolPermissions || {}));
 
   return c.json({ id, name, type });
 });
@@ -24,7 +24,7 @@ agentRoutes.get('/', async (c) => {
   const db = getDb();
 
   const agents = await db.prepare(`
-    SELECT id, name, type, description, model, created_at
+    SELECT id, name, type, description, model, tool_permissions, created_at
     FROM agents WHERE user_id = ?
     ORDER BY created_at DESC
   `).all(user.id);
@@ -39,15 +39,26 @@ agentRoutes.put('/:id', async (c) => {
   const updates = await c.req.json();
 
   const db = getDb();
-  const fields = Object.keys(updates).filter(k => ['name', 'type', 'description', 'system_prompt', 'model', 'temperature', 'max_tokens'].includes(k));
+  const allowedFields = ['name', 'type', 'description', 'system_prompt', 'model', 'temperature', 'max_tokens'];
+  const fields = Object.keys(updates).filter(k => allowedFields.includes(k) || k === 'toolPermissions');
 
   if (fields.length === 0) return c.json({ error: 'No valid fields to update' }, 400);
 
-  const setClauses = fields.map(f => `${f} = ?`).join(', ');
-  const values = fields.map(f => updates[f === 'system_prompt' ? 'systemPrompt' : f] || updates[f]);
+  const setClauses: string[] = [];
+  const values: any[] = [];
+
+  for (const f of fields) {
+    if (f === 'toolPermissions') {
+      setClauses.push('tool_permissions = ?');
+      values.push(JSON.stringify(updates.toolPermissions || {}));
+    } else {
+      setClauses.push(`${f} = ?`);
+      values.push(updates[f === 'system_prompt' ? 'systemPrompt' : f] || updates[f]);
+    }
+  }
 
   await db.prepare(`
-    UPDATE agents SET ${setClauses}, updated_at = unixepoch()
+    UPDATE agents SET ${setClauses.join(', ')}, updated_at = unixepoch()
     WHERE id = ? AND user_id = ?
   `).run(...values, agentId, user.id);
 

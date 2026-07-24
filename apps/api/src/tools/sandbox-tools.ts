@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import { sandboxService } from '../sandbox/service.js';
+import { dockerSandbox, createDockerSandboxProvider } from '../services/sandbox/docker.js';
 import type { ToolDefinition, ToolContext, ToolResult } from '../agent/types.js';
+import type { SandboxProvider } from '../services/sandbox/types.js';
 
 // Sandbox-aware tool context extends base context
 export interface SandboxToolContext extends ToolContext {
   sandboxId?: string;
+  sandboxProvider?: 'e2b' | 'docker';
   /** Ask the user a question mid-execution (HITL). Returns the user's answer. */
   askQuestion?: (
     question: string,
@@ -14,16 +17,23 @@ export interface SandboxToolContext extends ToolContext {
   ) => Promise<string | string[]>;
 }
 
-function requireSandbox(ctx: ToolContext): string {
-  const sandboxId = (ctx as SandboxToolContext).sandboxId;
+function requireSandbox(ctx: ToolContext): { sandboxId: string; provider: 'e2b' | 'docker' } {
+  const sctx = ctx as SandboxToolContext;
+  const sandboxId = sctx.sandboxId;
   if (!sandboxId) {
-    throw new Error('No sandbox available. E2B_API_KEY must be configured and sandbox creation must succeed.');
+    throw new Error('No sandbox available. Configure E2B_API_KEY or ensure Docker is running.');
   }
-  return sandboxId;
+  return { sandboxId, provider: sctx.sandboxProvider || 'e2b' };
+}
+
+function getProvider(provider: 'e2b' | 'docker', sandboxId: string): SandboxProvider {
+  if (provider === 'docker') {
+    return createDockerSandboxProvider(sandboxId);
+  }
+  return sandboxService as unknown as SandboxProvider;
 }
 
 function sanitizePath(path: string): string {
-  // Prevent path traversal
   const normalized = path.replace(/\\/g, '/').replace(/\/+/g, '/');
   if (normalized.includes('..')) {
     throw new Error('Path traversal not allowed');
@@ -32,7 +42,7 @@ function sanitizePath(path: string): string {
 }
 
 // ──────────────────────────────────────────────
-// Sandbox Tools (all 12 routed to E2B)
+// Sandbox Tools (routed through provider)
 // ──────────────────────────────────────────────
 
 export const sandboxToolDefinitions: ToolDefinition[] = [
@@ -46,12 +56,22 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       workdir: z.string().optional().describe('Working directory (absolute path)'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const command = args.command as string;
       const workdir = args.workdir as string | undefined;
 
       try {
         const fullCmd = workdir ? `cd ${sanitizePath(workdir)} && ${command}` : command;
+        if (provider === 'docker') {
+          const p = getProvider(provider, sandboxId);
+          const result = await p.executeCommand!(fullCmd);
+          return {
+            output: result.stdout,
+            stderr: result.stderr,
+            exitCode: result.exitCode,
+            executionTime: result.executionTime,
+          };
+        }
         const result = await sandboxService.executeCommand(sandboxId, fullCmd);
         return {
           output: result.stdout,
@@ -74,10 +94,15 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       path: z.string().describe('Absolute file path in sandbox'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const path = sanitizePath(args.path as string);
 
       try {
+        if (provider === 'docker') {
+          const p = getProvider(provider, sandboxId);
+          const content = await p.readFile!(path);
+          return { content, path, size: content.length };
+        }
         const content = await sandboxService.readFile(sandboxId, path);
         return { content, path, size: content.length };
       } catch (error: any) {
@@ -96,11 +121,16 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       content: z.string().describe('Content to write to the file'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const path = sanitizePath(args.path as string);
       const content = args.content as string;
 
       try {
+        if (provider === 'docker') {
+          const p = getProvider(provider, sandboxId);
+          await p.createFile!(path, content);
+          return { success: true, path, bytes: content.length };
+        }
         await sandboxService.writeFile(sandboxId, path, content);
         return { success: true, path, bytes: content.length };
       } catch (error: any) {
@@ -120,12 +150,22 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       new_string: z.string().describe('Replacement string'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const path = sanitizePath(args.path as string);
       const oldStr = args.old_string as string;
       const newStr = args.new_string as string;
 
       try {
+        if (provider === 'docker') {
+          const p = getProvider(provider, sandboxId);
+          const content = await p.readFile!(path);
+          const count = content.split(oldStr).length - 1;
+          if (count === 0) throw new Error('String not found in file');
+          if (count > 1) throw new Error(`Found ${count} occurrences. Provide more context to match uniquely.`);
+          const newContent = content.replace(oldStr, newStr);
+          await p.createFile!(path, newContent);
+          return { success: true, path, edited: true };
+        }
         await sandboxService.editFile(sandboxId, path, oldStr, newStr);
         return { success: true, path, edited: true };
       } catch (error: any) {
@@ -147,18 +187,28 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       })).describe('Array of patch operations'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const patches = args.patches as Array<{ path: string; old_string: string; new_string: string }>;
 
       const results: Array<{ path: string; success: boolean; error?: string }> = [];
       for (const patch of patches) {
         try {
-          await sandboxService.editFile(
-            sandboxId,
-            sanitizePath(patch.path),
-            patch.old_string,
-            patch.new_string
-          );
+          if (provider === 'docker') {
+            const p = getProvider(provider, sandboxId);
+            const path = sanitizePath(patch.path);
+            const content = await p.readFile!(path);
+            const count = content.split(patch.old_string).length - 1;
+            if (count === 0) throw new Error('String not found');
+            if (count > 1) throw new Error(`Found ${count} occurrences`);
+            await p.createFile!(path, content.replace(patch.old_string, patch.new_string));
+          } else {
+            await sandboxService.editFile(
+              sandboxId,
+              sanitizePath(patch.path),
+              patch.old_string,
+              patch.new_string,
+            );
+          }
           results.push({ path: patch.path, success: true });
         } catch (error: any) {
           results.push({ path: patch.path, success: false, error: error.message });
@@ -180,11 +230,22 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       path: z.string().optional().describe('Directory to search in (default: /)'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const pattern = args.pattern as string;
       const searchPath = (args.path as string) || '/';
 
       try {
+        if (provider === 'docker') {
+          const result = await dockerSandbox.executeCommand!(
+            `find ${sanitizePath(searchPath)} -name "${pattern}" -type f 2>/dev/null | head -100`,
+          );
+          const files = result.stdout.split('\n').filter(Boolean).map(f => ({
+            name: f.split('/').pop() || f,
+            type: 'file' as const,
+            path: f,
+          }));
+          return { files: files.slice(0, 100), count: files.length };
+        }
         const files = await sandboxService.searchFiles(sandboxId, pattern, sanitizePath(searchPath));
         return { files: files.slice(0, 100), count: files.length };
       } catch (error: any) {
@@ -204,15 +265,24 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       include: z.string().optional().describe('File pattern to include (e.g. "*.ts")'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const pattern = args.pattern as string;
       const searchPath = sanitizePath((args.path as string) || '/');
       const include = args.include as string | undefined;
 
       try {
+        if (provider === 'docker') {
+          const cmd = `grep -rn '${pattern.replace(/'/g, "'\\''")}' ${searchPath}${include ? ` --include="${include}"` : ''} 2>/dev/null | head -100`;
+          const result = await dockerSandbox.executeCommand!(cmd);
+          const matches = result.stdout.split('\n').filter(Boolean).map(line => {
+            const [file, ...rest] = line.split(':');
+            return { file, match: rest.join(':') };
+          });
+          return { matches, count: matches.length };
+        }
         const result = await sandboxService.executeCommand(
           sandboxId,
-          `grep -rn '${pattern.replace(/'/g, "'\\''")}' ${searchPath}${include ? ` --include="${include}"` : ''} | head -100`
+          `grep -rn '${pattern.replace(/'/g, "'\\''")}' ${searchPath}${include ? ` --include="${include}"` : ''} | head -100`,
         );
         const matches = result.stdout.split('\n').filter(Boolean).map(line => {
           const [file, ...rest] = line.split(':');
@@ -220,7 +290,6 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
         });
         return { matches, count: matches.length };
       } catch (error: any) {
-        // grep exits with code 1 when no matches found
         if (error.message?.includes('exit code 1')) {
           return { matches: [], count: 0 };
         }
@@ -238,10 +307,15 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       path: z.string().optional().describe('Directory path (defaults to /)'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const path = sanitizePath((args.path as string) || '/');
 
       try {
+        if (provider === 'docker') {
+          const p = getProvider(provider, sandboxId);
+          const items = await p.listFiles!(path);
+          return { items, count: items.length, path };
+        }
         const items = await sandboxService.listFiles(sandboxId, path);
         return { items, count: items.length, path };
       } catch (error: any) {
@@ -262,14 +336,13 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       body: z.string().optional().describe('Request body (for POST/PUT/PATCH)'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const url = args.url as string;
       const method = (args.method as string) || 'GET';
       const headers = args.headers as Record<string, string> | undefined;
       const body = args.body as string | undefined;
 
       try {
-        // Build curl command
         let cmd = `curl -s -w '\\n%{http_code}' -X ${method}`;
         if (headers) {
           for (const [key, value] of Object.entries(headers)) {
@@ -281,16 +354,18 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
         }
         cmd += ` '${url}'`;
 
+        if (provider === 'docker') {
+          const result = await dockerSandbox.executeCommand!(cmd);
+          const lines = result.stdout.split('\n');
+          const statusCode = parseInt(lines[lines.length - 1]) || 0;
+          const responseBody = lines.slice(0, -1).join('\n');
+          return { status: statusCode, body: responseBody, size: responseBody.length };
+        }
         const result = await sandboxService.executeCommand(sandboxId, cmd);
         const lines = result.stdout.split('\n');
         const statusCode = parseInt(lines[lines.length - 1]) || 0;
         const responseBody = lines.slice(0, -1).join('\n');
-
-        return {
-          status: statusCode,
-          body: responseBody,
-          size: responseBody.length,
-        };
+        return { status: statusCode, body: responseBody, size: responseBody.length };
       } catch (error: any) {
         return { error: error.message };
       }
@@ -307,13 +382,18 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       path: z.string().optional().describe('Directory to search in (default: /)'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const query = args.query as string;
       const searchPath = sanitizePath((args.path as string) || '/');
 
       try {
-        // Use ripgrep if available, fallback to grep
-        let cmd = `if command -v rg &> /dev/null; then rg -n '${query.replace(/'/g, "'\\''")}' ${searchPath} --max-count 50 2>/dev/null; else grep -rn '${query.replace(/'/g, "'\\''")}' ${searchPath} --include="*.{ts,tsx,js,jsx,py,go,rs,java,rb,php,css,html}" 2>/dev/null | head -50; fi`;
+        const cmd = `if command -v rg &> /dev/null; then rg -n '${query.replace(/'/g, "'\\''")}' ${searchPath} --max-count 50 2>/dev/null; else grep -rn '${query.replace(/'/g, "'\\''")}' ${searchPath} --include="*.{ts,tsx,js,jsx,py,go,rs,java,rb,php,css,html}" 2>/dev/null | head -50; fi`;
+
+        if (provider === 'docker') {
+          const result = await dockerSandbox.executeCommand!(cmd);
+          const matches = result.stdout.split('\n').filter(Boolean);
+          return { matches, count: matches.length };
+        }
         const result = await sandboxService.executeCommand(sandboxId, cmd);
         const matches = result.stdout.split('\n').filter(Boolean);
         return { matches, count: matches.length };
@@ -333,7 +413,7 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
       linter: z.enum(['eslint', 'prettier', 'ruff', 'golangci-lint']).optional().describe('Linter to use (auto-detect if omitted)'),
     }),
     execute: async (args, ctx): Promise<ToolResult> => {
-      const sandboxId = requireSandbox(ctx);
+      const { sandboxId, provider } = requireSandbox(ctx);
       const targetPath = sanitizePath((args.path as string) || '.');
       const linter = args.linter as string | undefined;
 
@@ -357,22 +437,20 @@ export const sandboxToolDefinitions: ToolDefinition[] = [
               cmd = `echo "Unknown linter: ${linter}"`;
           }
         } else {
-          // Auto-detect: check for config files
           cmd = `if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ]; then npx eslint ${targetPath} --format json 2>/dev/null || true; elif [ -f "ruff.toml" ] || [ -f "pyproject.toml" ]; then ruff check ${targetPath} 2>/dev/null || true; elif [ -f "go.mod" ]; then golangci-lint run ${targetPath} 2>/dev/null || true; else echo "No linter config found. Install and configure a linter first."; fi`;
         }
 
+        if (provider === 'docker') {
+          const result = await dockerSandbox.executeCommand!(cmd);
+          return { output: result.stdout, stderr: result.stderr, exitCode: result.exitCode };
+        }
         const result = await sandboxService.executeCommand(sandboxId, cmd);
-        return {
-          output: result.stdout,
-          stderr: result.stderr,
-          exitCode: result.exitCode,
-        };
+        return { output: result.stdout, stderr: result.stderr, exitCode: result.exitCode };
       } catch (error: any) {
         return { error: error.message };
       }
     },
   },
-
 ];
 
 // 13. install_package (bonus tool for sandbox)
@@ -385,11 +463,17 @@ export const installPackageTool: ToolDefinition = {
     manager: z.enum(['npm', 'pip', 'yarn', 'pnpm']).optional().describe('Package manager (auto-detect if omitted)'),
   }),
   execute: async (args, ctx): Promise<ToolResult> => {
-    const sandboxId = requireSandbox(ctx);
+    const { sandboxId, provider } = requireSandbox(ctx);
     const packageName = args.package as string;
     const manager = args.manager as string | undefined;
 
     try {
+      if (provider === 'docker') {
+        const pkgManager = manager || 'npm';
+        const cmd = pkgManager === 'pip' ? `pip install ${packageName}` : `${pkgManager} install ${packageName}`;
+        const result = await dockerSandbox.executeCommand!(cmd);
+        return { output: result.stdout, package: packageName };
+      }
       const output = await sandboxService.installPackage(sandboxId, packageName, manager);
       return { output, package: packageName };
     } catch (error: any) {

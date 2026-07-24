@@ -13,6 +13,7 @@ export interface Agent {
   skills?: string[];
   enabledTools?: string[];
   disabledTools?: string[];
+  toolPermissions?: Record<string, 'allow' | 'deny' | 'ask'>;
   subAgents?: string[];
   status: 'active' | 'inactive';
   createdAt?: Date;
@@ -101,6 +102,7 @@ export interface AgentConfig {
   userId?: string;
   sessionId?: string;
   sandboxId?: string;
+  sandboxProvider?: 'e2b' | 'docker';
   hooks?: LifecycleHooks;
   tools?: ToolDefinition[];
   maxIterations?: number;

@@ -59,7 +59,7 @@ class ArtifactService {
     expiresInHours: number = 1,
   ): Promise<{ shareUrl: string; sandboxId: string; expiresAt: number } | null> {
     const db = getDb();
-    const artifact = this.get(id, userId);
+    const artifact = await this.get(id, userId);
     if (!artifact) return null;
 
     // Clean up any previous sandbox for this artifact
@@ -115,7 +115,7 @@ class ArtifactService {
    */
   async destroySandboxShare(id: string, userId: string): Promise<boolean> {
     const db = getDb();
-    const artifact = this.get(id, userId);
+    const artifact = await this.get(id, userId);
     if (!artifact?.sandboxId) return false;
 
     try {
@@ -268,7 +268,7 @@ class ArtifactService {
     expiresInHours: number = 24
   ): Promise<{ shareUrl: string; expiresAt: number } | null> {
     const db = getDb();
-    const artifact = this.get(id, userId);
+    const artifact = await this.get(id, userId);
     if (!artifact) return null;
 
     // Generate hash-based share ID

@@ -14,8 +14,10 @@ export interface SandboxSession {
   status: 'creating' | 'running' | 'executing' | 'stopping' | 'stopped';
   userId: string;
   language: string;
+  persistent: boolean;
   createdAt: number;
   lastUsed: number;
+  expiresAt: number;
 }
 
 export interface SandboxResult {
@@ -67,7 +69,7 @@ class SandboxService {
   private sessionTimeout = 30 * 60 * 1000; // 30 minutes
   private tempFiles: Map<string, Map<string, TemporaryFile>> = new Map();
 
-  async createSession(userId: string, language: string = 'node'): Promise<SandboxSession> {
+  async createSession(userId: string, language: string = 'node', persistent: boolean = false): Promise<SandboxSession> {
     const userSessions = Array.from(this.sessions.values())
       .filter(s => s.userId === userId && s.status === 'running');
 
@@ -77,6 +79,8 @@ class SandboxService {
     }
 
     const sessionId = crypto.randomUUID();
+    const keepAliveMs = persistent ? 24 * 60 * 60 * 1000 : 30 * 60 * 1000; // 24h vs 30min
+    const expiresAt = Date.now() + keepAliveMs;
 
     try {
       const sandbox = await Sandbox.create({
@@ -84,10 +88,11 @@ class SandboxService {
         metadata: {
           'session-id': sessionId,
           'user-id': userId,
+          'persistent': String(persistent),
         },
       }) as unknown as E2BSandbox;
 
-      await sandbox.keepAlive(30 * 60); // 30 minutes
+      await sandbox.keepAlive(persistent ? 24 * 60 * 60 : 30 * 60); // 24h vs 30min
 
       const session: SandboxSession = {
         id: sessionId,
@@ -95,8 +100,10 @@ class SandboxService {
         status: 'running',
         userId,
         language,
+        persistent,
         createdAt: Date.now(),
         lastUsed: Date.now(),
+        expiresAt,
       };
 
       this.sessions.set(sessionId, session);
@@ -104,7 +111,7 @@ class SandboxService {
 
       setTimeout(() => {
         this.destroySession(sessionId).catch(console.error);
-      }, this.sessionTimeout);
+      }, keepAliveMs);
 
       return session;
     } catch (error: any) {
@@ -417,6 +424,23 @@ class SandboxService {
   listSessions(userId: string): SandboxSession[] {
     return Array.from(this.sessions.values())
       .filter(s => s.userId === userId && s.status !== 'stopped');
+  }
+
+  listPersistentSessions(userId: string): SandboxSession[] {
+    return Array.from(this.sessions.values())
+      .filter(s => s.userId === userId && s.persistent && s.status === 'running');
+  }
+
+  async extendSession(sessionId: string, hours: number = 24): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error('Session not found');
+
+    const extension = hours * 60 * 60 * 1000;
+    session.expiresAt = Date.now() + extension;
+    session.lastUsed = Date.now();
+
+    const sandbox = session.sandbox as unknown as E2BSandbox;
+    await sandbox.keepAlive(hours * 60 * 60);
   }
 
   private getE2BTemplate(language: string): string {

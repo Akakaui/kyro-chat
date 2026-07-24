@@ -6,7 +6,7 @@
 // no-ops. Graceful degradation throughout.
 // ---------------------------------------------------------------------------
 
-import type { Span } from '@sentry/types';
+import type { Span } from '@sentry/node';
 
 // Lazy import to avoid crash if packages aren't installed
 let Sentry: typeof import('@sentry/node') | null = null;

@@ -271,6 +271,7 @@ function AgentModal({
   const [type, setType] = useState<"primary" | "sub" | "both">(agent?.type || "primary")
   const [model, setModel] = useState(agent?.model || "gpt-4o")
   const [systemPrompt, setSystemPrompt] = useState(agent?.system_prompt || "")
+  const [toolPermissions, setToolPermissions] = useState<Record<string, 'allow' | 'deny' | 'ask'>>(agent?.tool_permissions || {})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
@@ -281,9 +282,14 @@ function AgentModal({
       setType(agent?.type || "primary")
       setModel(agent?.model || "gpt-4o")
       setSystemPrompt(agent?.system_prompt || "")
+      setToolPermissions(agent?.tool_permissions || {})
       setError("")
     }
   }, [open, agent])
+
+  function setToolPerm(tool: string, perm: 'allow' | 'deny' | 'ask') {
+    setToolPermissions(prev => ({ ...prev, [tool]: perm }))
+  }
 
   async function handleSave() {
     if (!name.trim()) {
@@ -300,6 +306,7 @@ function AgentModal({
           type,
           model,
           system_prompt: systemPrompt.trim(),
+          tool_permissions: toolPermissions,
         })
         onCreated(updated)
       } else {
@@ -309,6 +316,7 @@ function AgentModal({
           type,
           model,
           system_prompt: systemPrompt.trim(),
+          toolPermissions,
         })
         onCreated(created)
       }
@@ -398,6 +406,57 @@ function AgentModal({
               rows={4}
               className="mt-1.5 font-mono text-xs"
             />
+          </div>
+
+          {/* Tool Permissions */}
+          <div>
+            <label className="text-xs text-text-secondary">Tool Permissions</label>
+            <div className="mt-2 space-y-3">
+              {[
+                { category: 'File', tools: ['create_file', 'read_file', 'update_file', 'delete_file'] },
+                { category: 'Code', tools: ['execute_code', 'sandbox_create', 'sandbox_read', 'sandbox_write', 'sandbox_list', 'sandbox_remove'] },
+                { category: 'Search', tools: ['web_search', 'web_fetch'] },
+                { category: 'Web', tools: ['browser_navigate', 'browser_click', 'browser_type', 'browser_extract', 'browser_screenshot'] },
+                { category: 'Agent', tools: ['agent_call', 'agent_list'] },
+                { category: 'Artifacts', tools: ['artifact_create', 'artifact_update', 'artifact_search'] },
+                { category: 'Memory', tools: ['memory_store', 'memory_search', 'memory_get'] },
+              ].map(group => (
+                <div key={group.category}>
+                  <div className="text-[10px] font-medium uppercase text-text-muted mb-1">{group.category}</div>
+                  <div className="space-y-1">
+                    {group.tools.map(tool => (
+                      <div key={tool} className="flex items-center justify-between rounded-md bg-bg-primary px-2 py-1.5">
+                        <span className="text-xs text-text-secondary font-mono">{tool}</span>
+                        <div className="flex gap-1">
+                          {(['allow', 'ask', 'deny'] as const).map(perm => (
+                            <button
+                              key={perm}
+                              onClick={() => setToolPerm(tool, perm)}
+                              className={`h-6 w-6 flex items-center justify-center rounded-md border text-[10px] transition-all ${
+                                toolPermissions[tool] === perm
+                                  ? perm === 'allow'
+                                    ? 'bg-success/20 border-success text-success'
+                                    : perm === 'ask'
+                                    ? 'bg-accent/20 border-accent text-accent'
+                                    : 'bg-danger/20 border-danger text-danger'
+                                  : perm === 'allow'
+                                  ? 'border-success/30 text-success/50 hover:bg-success/10'
+                                  : perm === 'ask'
+                                  ? 'border-accent/30 text-accent/50 hover:bg-accent/10'
+                                  : 'border-danger/30 text-danger/50 hover:bg-danger/10'
+                              }`}
+                              title={perm.charAt(0).toUpperCase() + perm.slice(1)}
+                            >
+                              {perm === 'allow' ? '✓' : perm === 'ask' ? '?' : '✗'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {error && (

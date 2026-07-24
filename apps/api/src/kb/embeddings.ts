@@ -1,4 +1,5 @@
 let embeddingModel: any = null;
+let _pipeline: any = null;
 
 /**
  * Get or initialize the embedding model (lazy loading)

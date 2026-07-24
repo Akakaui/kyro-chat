@@ -285,6 +285,7 @@ export async function initDb() {
       `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS custom_model TEXT`,
       `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS is_valid INTEGER DEFAULT 1`,
       `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)`,
+      `ALTER TABLE agents ADD COLUMN IF NOT EXISTS tool_permissions TEXT DEFAULT '{}'`,
     ];
     for (const sql of migrations) {
       await pool.query(sql).catch(() => {});

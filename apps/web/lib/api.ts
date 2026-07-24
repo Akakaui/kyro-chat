@@ -47,7 +47,7 @@ export async function deleteConversation(id: string) {
 
 export async function updateConversation(
   id: string,
-  data: Partial<Pick<Conversation, "title" | "starred" | "archived">>
+  data: Partial<Pick<Conversation, "title" | "starred" | "archived" | "project_id">>
 ) {
   return request<Conversation>(`/api/chat/conversations/${id}`, {
     method: "PATCH",
@@ -175,7 +175,7 @@ export async function listAgents() {
   return request<{ agents: Agent[] }>("/api/agents")
 }
 
-export async function createAgent(data: { name: string; type?: string; description?: string; system_prompt?: string; model?: string }) {
+export async function createAgent(data: { name: string; type?: string; description?: string; system_prompt?: string; model?: string; toolPermissions?: Record<string, 'allow' | 'deny' | 'ask'> }) {
   return request<Agent>("/api/agents", {
     method: "POST",
     body: JSON.stringify(data),
@@ -485,6 +485,7 @@ export interface Agent {
   max_tokens?: number
   skills?: string
   permissions?: string
+  tool_permissions?: Record<string, 'allow' | 'deny' | 'ask'>
   created_at: number
   updated_at: number
 }

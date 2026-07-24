@@ -8,6 +8,7 @@ import {
   Filter, FileCode
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import Link from 'next/link';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ChatView } from '../../components/chat/ChatView';
@@ -173,11 +174,11 @@ export default function ChatPage() {
   const displayedConversations = chatFilter === 'starred' ? starredConversations : recentConversations;
 
   const navItems = [
-    { icon: MessageSquare, label: 'Chats', tab: 'chats' },
-    { icon: FolderOpen, label: 'Projects', tab: 'projects' },
+    { icon: MessageSquare, label: 'Chats', tab: 'chats', href: '/chats' },
+    { icon: FolderOpen, label: 'Projects', tab: 'projects', href: '/projects' },
     { icon: Wrench, label: 'Agents', tab: 'agents' },
     { icon: Clock, label: 'Tasks', tab: 'tasks' },
-    { icon: FileCode, label: 'Artifacts', tab: 'artifacts' },
+    { icon: FileCode, label: 'Artifacts', tab: 'artifacts', href: '/artifacts' },
     { icon: Brain, label: 'Memory', tab: 'memory' },
     { icon: Plug, label: 'Connectors', tab: 'connectors' },
     { icon: Settings, label: 'Settings', tab: 'settings', onClick: () => setSettingsPanelOpen(true) },
@@ -225,144 +226,48 @@ export default function ChatPage() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-2">
           {navItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => {
-                if (item.onClick) item.onClick();
-                else setActiveTab(item.tab);
-              }}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors mb-0.5",
-                activeTab === item.tab
-                  ? "bg-bg-active text-accent"
-                  : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-              )}
-            >
-              <item.icon size={16} />
-              {item.label}
-            </button>
+            item.href ? (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors mb-0.5"
+              >
+                <item.icon size={16} />
+                {item.label}
+              </Link>
+            ) : (
+              <button
+                key={item.label}
+                onClick={() => {
+                  if (item.onClick) item.onClick();
+                  else setActiveTab(item.tab);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors mb-0.5",
+                  activeTab === item.tab
+                    ? "bg-bg-active text-accent"
+                    : "text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+                )}
+              >
+                <item.icon size={16} />
+                {item.label}
+              </button>
+            )
           ))}
 
-          {/* Conversations list */}
-          {activeTab === 'chats' && <div className="mt-4">
-            {/* Filter dropdown */}
-            <div className="relative mb-2 px-1">
-              <button
-                onClick={() => setFilterMenuOpen(!filterMenuOpen)}
-                className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted hover:text-text-secondary"
+          {/* Redirect to dedicated pages */}
+          {activeTab === 'chats' && (
+            <div className="mt-6 px-3 text-center">
+              <p className="text-xs text-text-muted mb-3">All conversations</p>
+              <Link
+                href="/chats"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
               >
-                <Filter size={10} />
-                {chatFilter === 'starred' ? 'Starred' : 'All chats'}
-                <ChevronDown size={10} className={cn("transition-transform", filterMenuOpen && "rotate-180")} />
-              </button>
-              {filterMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setFilterMenuOpen(false)} />
-                  <div className="absolute left-1 top-full z-20 mt-0.5 w-36 rounded-lg border border-border bg-bg-primary py-1 shadow-xl">
-                    <button
-                      onClick={() => { setChatFilter('all'); setFilterMenuOpen(false); }}
-                      className={cn(
-                        "flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors",
-                        chatFilter === 'all' ? "text-accent" : "text-text-secondary hover:bg-bg-tertiary"
-                      )}
-                    >
-                      All chats
-                    </button>
-                    <button
-                      onClick={() => { setChatFilter('starred'); setFilterMenuOpen(false); }}
-                      className={cn(
-                        "flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors",
-                        chatFilter === 'starred' ? "text-accent" : "text-text-secondary hover:bg-bg-tertiary"
-                      )}
-                    >
-                      <Star size={10} className="fill-current" />
-                      Starred
-                    </button>
-                  </div>
-                </>
-              )}
+                <MessageSquare size={12} />
+                Open Chats page
+              </Link>
             </div>
-
-            {/* Starred section (only when showing all) */}
-            {chatFilter === 'all' && starredConversations.length > 0 && (
-              <div className="mb-3">
-                <h3 className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                  Starred
-                </h3>
-                {starredConversations.map(conv => (
-                  <ConversationItem
-                    key={conv.id}
-                    conv={conv}
-                    isActive={activeConversation === conv.id}
-                    editingId={editingId}
-                    editTitle={editTitle}
-                    setEditTitle={setEditTitle}
-                    onSelect={() => { setActiveConversation(conv.id); setSidebarOpen(false); }}
-                    onContextMenu={(e) => handleContextMenu(e, conv.id)}
-                    onRename={() => handleRenameConversation(conv.id)}
-                    onStartEdit={(id, title) => { setEditingId(id); setEditTitle(title); }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Recent / Filtered list */}
-            <div>
-              {chatFilter === 'all' && (
-                <h3 className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                  Recent
-                </h3>
-              )}
-              {displayedConversations.map(conv => (
-                <ConversationItem
-                  key={conv.id}
-                  conv={conv}
-                  isActive={activeConversation === conv.id}
-                  editingId={editingId}
-                  editTitle={editTitle}
-                  setEditTitle={setEditTitle}
-                  onSelect={() => { setActiveConversation(conv.id); setSidebarOpen(false); }}
-                  onContextMenu={(e) => handleContextMenu(e, conv.id)}
-                  onRename={() => handleRenameConversation(conv.id)}
-                  onStartEdit={(id, title) => { setEditingId(id); setEditTitle(title); }}
-                />
-              ))}
-              {displayedConversations.length === 0 && (
-                <p className="px-3 py-4 text-xs text-text-muted text-center">
-                  {chatFilter === 'starred' ? 'No starred conversations' : 'No conversations yet'}
-                </p>
-              )}
-            </div>
-
-            {/* Archived */}
-            {chatFilter === 'all' && archivedConversations.length > 0 && (
-              <div className="mt-3">
-                <button
-                  onClick={() => setShowArchived(!showArchived)}
-                  className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted hover:text-text-secondary"
-                >
-                  <Archive size={12} />
-                  Archived ({archivedConversations.length})
-                  <ChevronDown size={12} className={cn("transition-transform", showArchived && "rotate-180")} />
-                </button>
-                {showArchived && archivedConversations.map(conv => (
-                  <ConversationItem
-                    key={conv.id}
-                    conv={conv}
-                    isActive={false}
-                    editingId={editingId}
-                    editTitle={editTitle}
-                    setEditTitle={setEditTitle}
-                    onSelect={() => { setActiveConversation(conv.id); setSidebarOpen(false); }}
-                    onContextMenu={(e) => handleContextMenu(e, conv.id)}
-                    onRename={() => handleRenameConversation(conv.id)}
-                    onStartEdit={(id, title) => { setEditingId(id); setEditTitle(title); }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-          }
+          )}
 
           {/* Agents panel */}
           {activeTab === 'agents' && (
@@ -392,25 +297,31 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Knowledge Bases panel (shown under Projects) */}
+          {/* Projects → dedicated page */}
           {activeTab === 'projects' && (
-            <div className="mt-2">
-              {selectedProjectId ? (
-                <KnowledgeBasePanel projectId={selectedProjectId} />
-              ) : (
-                <ProjectsPanel
-                  onSelectProject={setSelectedProjectId}
-                  selectedProjectId={selectedProjectId}
-                  onClose={() => setActiveTab('chats')}
-                />
-              )}
+            <div className="mt-6 px-3 text-center">
+              <p className="text-xs text-text-muted mb-3">Organize your work</p>
+              <Link
+                href="/projects"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                <FolderOpen size={12} />
+                Open Projects page
+              </Link>
             </div>
           )}
 
-          {/* Artifacts panel — global across all chats */}
+          {/* Artifacts → dedicated page */}
           {activeTab === 'artifacts' && (
-            <div className="mt-2">
-              <ArtifactPanel />
+            <div className="mt-6 px-3 text-center">
+              <p className="text-xs text-text-muted mb-3">Generated files</p>
+              <Link
+                href="/artifacts"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                <FileCode size={12} />
+                Open Artifacts page
+              </Link>
             </div>
           )}
         </nav>

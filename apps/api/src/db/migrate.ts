@@ -83,15 +83,15 @@ async function getSQLiteSchema(): Promise<Record<string, string>> {
 
   try {
     // Get all tables
-    const tables = await db.all(`
+    const tables = await db.prepare(`
       SELECT name FROM sqlite_master
       WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
       ORDER BY name
-    `);
+    `).all() as Array<{ name: string }>;
 
     for (const table of tables) {
       try {
-        const row: Record<string, unknown> | undefined = await db.get(`SELECT sql FROM sqlite_master WHERE name = ?`, table.name);
+        const row: Record<string, unknown> | undefined = await db.prepare(`SELECT sql FROM sqlite_master WHERE name = ?`).get(table.name) as Record<string, unknown> | undefined;
         if (row && typeof row.sql === 'string') {
           schema[table.name] = row.sql;
         }

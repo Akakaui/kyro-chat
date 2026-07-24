@@ -56,11 +56,13 @@ export class AgentOrchestrator {
   private config: AgentConfig;
   private hooks: LifecycleHooks;
   private sandboxId?: string;
+  private sandboxProvider?: 'e2b' | 'docker';
 
   constructor(config: AgentConfig) {
     this.config = config;
     this.hooks = config.hooks || {};
     this.sandboxId = config.sandboxId;
+    this.sandboxProvider = config.sandboxProvider;
     this.state = {
       messages: [],
       toolsUsed: [],
@@ -90,6 +92,7 @@ export class AgentOrchestrator {
       agentId: this.config.agent.id,
       sessionId: this.config.sessionId,
       sandboxId: this.sandboxId,
+      sandboxProvider: this.sandboxProvider,
       apiKey: this.config.apiKey,
       provider: this.config.provider,
     };
@@ -213,6 +216,7 @@ export class AgentOrchestrator {
       agentId: this.config.agent.id,
       sessionId: this.config.sessionId,
       sandboxId: this.sandboxId,
+      sandboxProvider: this.sandboxProvider,
       apiKey: this.config.apiKey,
       provider: this.config.provider,
       // HITL: inject askQuestion so tools can pause and ask the user
@@ -436,6 +440,19 @@ export class AgentOrchestrator {
 
     if (this.config.userId) {
       prompt += '\n\nYou have access to a knowledge base. Use the knowledge_base tool to read, search, upload, or manage files in the knowledge base.';
+    }
+
+    // Include tool permission info in system prompt
+    const perms = this.config.agent.toolPermissions;
+    if (perms && Object.keys(perms).length > 0) {
+      const denied = Object.entries(perms).filter(([, p]) => p === 'deny').map(([t]) => t);
+      const ask = Object.entries(perms).filter(([, p]) => p === 'ask').map(([t]) => t);
+      if (denied.length > 0) {
+        prompt += `\n\nYou do NOT have access to these tools: ${denied.join(', ')}. Do not attempt to use them.`;
+      }
+      if (ask.length > 0) {
+        prompt += `\n\nThese tools require user confirmation before use: ${ask.join(', ')}. You may use them but the user will be asked to approve each use.`;
+      }
     }
 
     return prompt;

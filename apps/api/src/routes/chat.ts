@@ -6,6 +6,7 @@ import { getModel, PROVIDER_MODELS } from '../agent/providers.js';
 import type { AgentConfig } from '../agent/types.js';
 import { streamText } from 'ai';
 import { sandboxService } from '../sandbox/service.js';
+import { dockerSandbox } from '../services/sandbox/docker.js';
 import { chatLimit } from '../middleware/rateLimit.js';
 
 export const chatRoutes = new Hono();
@@ -253,13 +254,28 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
   }
 
   // Auto-create sandbox for tool execution (invisible to user)
+  // Try E2B first, fall back to Docker
   let sandboxId: string | undefined;
+  let sandboxProvider: 'e2b' | 'docker' = 'e2b';
   try {
     const session = await sandboxService.createSession(user.id, 'node');
     sandboxId = session.id;
+    sandboxProvider = 'e2b';
   } catch (error) {
-    console.error('Failed to create sandbox for conversation:', error);
-    return c.json({ error: 'Sandbox is required but failed to initialize. Please check E2B_API_KEY is configured.' }, 503);
+    // E2B unavailable — try Docker
+    if (dockerSandbox.isAvailable?.()) {
+      try {
+        sandboxId = `docker_${user.id}_${Date.now()}`;
+        sandboxProvider = 'docker';
+        console.log(`[Chat] Using Docker sandbox for user ${user.id}`);
+      } catch (dockerError) {
+        console.error('Docker sandbox also failed:', dockerError);
+        return c.json({ error: 'No sandbox available. Configure E2B_API_KEY or ensure Docker is running.' }, 503);
+      }
+    } else {
+      console.error('Failed to create sandbox for conversation:', error);
+      return c.json({ error: 'Sandbox is required but failed to initialize. Please check E2B_API_KEY is configured or Docker is available.' }, 503);
+    }
   }
 
   // Track files before agent execution for artifact capture
@@ -281,8 +297,17 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
     try {
       if (agent) {
         // Use agent orchestrator for agentic responses
+        // Set up tool permission checking from agent's tool_permissions
+        let toolPermissions: Record<string, 'allow' | 'deny' | 'ask'> = {};
+        if (agent.id) {
+          const agentRow = await db.prepare(`SELECT tool_permissions FROM agents WHERE id = ? AND user_id = ?`).get(agent.id, user.id) as { tool_permissions: string } | undefined;
+          if (agentRow?.tool_permissions) {
+            try { toolPermissions = JSON.parse(agentRow.tool_permissions); } catch {}
+          }
+        }
+
         const config: AgentConfig = {
-          agent: { ...agent, systemPrompt: enrichedSystemPrompt },
+          agent: { ...agent, systemPrompt: enrichedSystemPrompt, toolPermissions },
           apiKey: resolvedApiKey,
           provider: resolvedProvider,
           model: resolvedModel,
@@ -290,9 +315,21 @@ chatRoutes.post('/conversations/:id/messages', chatLimit, async (c) => {
           userId: user.id,
           sessionId: conversationId,
           sandboxId,
+          sandboxProvider,
         };
 
         const orchestrator = new AgentOrchestrator(config);
+
+        // Override onBeforeTool to check per-agent tool permissions
+        const origOnBeforeTool = orchestrator['hooks'].onBeforeTool;
+        orchestrator['hooks'].onBeforeTool = async (ctx: any) => {
+          const perm = toolPermissions[ctx.toolName];
+          if (perm === 'deny') {
+            return { block: true, reason: `Tool "${ctx.toolName}" is denied by agent permissions` };
+          }
+          // 'ask' or undefined → allow (permission system handled elsewhere)
+          return origOnBeforeTool?.(ctx);
+        };
 
         // Add history to orchestrator
         for (const msg of history.slice(0, -1)) {

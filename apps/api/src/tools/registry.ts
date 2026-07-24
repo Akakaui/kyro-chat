@@ -534,7 +534,7 @@ export function registerBuiltinTools(): void {
       const limit = (args.limit as number) || 20;
       try {
         const { artifactService } = await import('../artifacts/service.js');
-        const artifacts = artifactService.list(ctx.userId || '', limit);
+        const artifacts = await artifactService.list(ctx.userId || '', limit);
         return { artifacts: artifacts.map((a: any) => ({ id: a.id, title: a.title, type: a.type, createdAt: a.createdAt })) };
       } catch (error: any) {
         return { error: error.message };

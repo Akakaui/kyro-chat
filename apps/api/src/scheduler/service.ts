@@ -116,7 +116,7 @@ class SchedulerService {
     updates: Partial<Pick<ScheduledTask, 'name' | 'description' | 'cronExpression' | 'agentId' | 'projectId' | 'permissionOverride' | 'emailNotification' | 'payload'>>
   ): Promise<boolean> {
     const db = getDb();
-    const task = this.get(id, userId);
+    const task = await this.get(id, userId);
     if (!task) return false;
 
     const fields: string[] = [];
@@ -300,8 +300,8 @@ class SchedulerService {
     console.log('Scheduler stopped');
   }
 
-  private scheduleNext(taskId: string): void {
-    const task = this.get(taskId, '');
+  private async scheduleNext(taskId: string): Promise<void> {
+    const task = await this.get(taskId, '');
     if (!task || task.status === 'cancelled') return;
 
     const interval = this.parseInterval(task.cronExpression || '1h');

@@ -23,7 +23,7 @@ artifactRoutes.get('/', async (c) => {
   const user = c.get('user');
   const limit = parseInt(c.req.query('limit') || '50');
 
-  const artifacts = artifactService.list(user.id, limit);
+  const artifacts = await artifactService.list(user.id, limit);
   return c.json({ artifacts });
 });
 
@@ -32,7 +32,7 @@ artifactRoutes.get('/:id', async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
 
-  const artifact = artifactService.get(id, user.id);
+  const artifact = await artifactService.get(id, user.id);
   if (!artifact) return c.json({ error: 'Not found' }, 404);
 
   return c.json({ artifact });
@@ -44,7 +44,7 @@ artifactRoutes.put('/:id', async (c) => {
   const id = c.req.param('id');
   const { title, content, metadata } = await c.req.json();
 
-  const success = artifactService.update(id, user.id, { title, content, metadata });
+  const success = await artifactService.update(id, user.id, { title, content, metadata });
   if (!success) return c.json({ error: 'Not found' }, 404);
 
   return c.json({ success: true });
@@ -55,7 +55,7 @@ artifactRoutes.delete('/:id', async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
 
-  const success = artifactService.delete(id, user.id);
+  const success = await artifactService.delete(id, user.id);
   if (!success) return c.json({ error: 'Not found' }, 404);
 
   return c.json({ success: true });
@@ -67,7 +67,7 @@ artifactRoutes.post('/:id/share', async (c) => {
   const id = c.req.param('id');
   const { expiresInHours = 24, visibility = 'link' } = await c.req.json();
 
-  const result = artifactService.createShareLink(id, user.id, expiresInHours);
+  const result = await artifactService.createShareLink(id, user.id, expiresInHours);
   if (!result) return c.json({ error: 'Not found' }, 404);
 
   // Store visibility preference
@@ -90,7 +90,7 @@ artifactRoutes.post('/:id/share', async (c) => {
 artifactRoutes.get('/share/:hash', async (c) => {
   const hash = c.req.param('hash');
 
-  const artifact = artifactService.getByShareHash(hash);
+  const artifact = await artifactService.getByShareHash(hash);
   if (!artifact) return c.json({ error: 'Not found or expired' }, 404);
 
   return c.json({
@@ -108,7 +108,7 @@ artifactRoutes.post('/share/:hash/remix', async (c) => {
   const hash = c.req.param('hash');
   const user = c.get('user');
 
-  const artifact = artifactService.getByShareHash(hash);
+  const artifact = await artifactService.getByShareHash(hash);
   if (!artifact) return c.json({ error: 'Not found or expired' }, 404);
 
   // Create a new conversation with the artifact as context
@@ -163,7 +163,7 @@ artifactRoutes.delete('/:id/share', async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
 
-  const success = artifactService.revokeShareLink(id, user.id);
+  const success = await artifactService.revokeShareLink(id, user.id);
   if (!success) return c.json({ error: 'Not found' }, 404);
 
   return c.json({ success: true });
