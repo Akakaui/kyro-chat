@@ -820,69 +820,60 @@ function StreamingIndicator({ messages }: { messages: any[] }) {
 
 function EmptyState() {
   const suggestions = [
-    { label: "Search the web", icon: <Globe size={14} /> },
-    { label: "Write code", icon: <Code2 size={14} /> },
-    { label: "Analyze data", icon: <BarChart2 size={14} /> },
-    { label: "Create artifact", icon: <Sparkles size={14} /> },
+    {
+      label: "Search the web",
+      icon: <Globe size={16} />,
+      prompt: "Search the web for the latest news on ",
+    },
+    {
+      label: "Write code",
+      icon: <Code2 size={16} />,
+      prompt: "Write a function that ",
+    },
+    {
+      label: "Analyze data",
+      icon: <BarChart2 size={16} />,
+      prompt: "Analyze this dataset and summarize the key trends: ",
+    },
+    {
+      label: "Create artifact",
+      icon: <Sparkles size={16} />,
+      prompt: "Create an artifact that ",
+    },
   ]
 
+  const handleSuggestion = (prompt: string) => {
+    window.dispatchEvent(new CustomEvent("kyro:prefill-input", { detail: { content: prompt } }))
+  }
+
   return (
-    <div
-      className="relative flex h-full min-h-[70vh] flex-col items-center justify-center px-6 text-center overflow-hidden"
-    >
+    <div className="relative flex min-h-[70vh] flex-col items-center justify-center overflow-hidden px-4 py-10 text-center sm:px-6">
       {/* Ambient background glow */}
       <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[18%] h-64 w-[min(90vw,600px)] -translate-x-1/2"
         style={{
-          position: "absolute",
-          top: "20%",
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "600px",
-          height: "400px",
-          background: "radial-gradient(ellipse at center, rgba(217,119,6,0.06) 0%, transparent 70%)",
-          pointerEvents: "none",
+          background: "radial-gradient(ellipse at center, rgba(217,119,6,0.08) 0%, transparent 70%)",
         }}
       />
 
       {/* Logo / Avatar */}
-      <div
-        style={{
-          position: "relative",
-          marginBottom: "2rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {/* Outer ring */}
+      <div className="relative mb-6 flex items-center justify-center sm:mb-8">
         <div
-          style={{
-            position: "absolute",
-            width: "88px",
-            height: "88px",
-            borderRadius: "50%",
-            border: "1px solid rgba(217,119,6,0.25)",
-            animation: "spin 8s linear infinite",
-          }}
+          className="absolute h-[76px] w-[76px] rounded-full border sm:h-[88px] sm:w-[88px]"
+          style={{ borderColor: "rgba(217,119,6,0.25)", animation: "spin 8s linear infinite" }}
         />
-        {/* Inner logo box */}
         <div
+          className="flex h-16 w-16 items-center justify-center rounded-[18px] border sm:h-[72px] sm:w-[72px] sm:rounded-[20px]"
           style={{
-            width: "72px",
-            height: "72px",
-            borderRadius: "20px",
             background: "linear-gradient(135deg, #1a1400 0%, #2d1f00 50%, #1a1400 100%)",
-            border: "1px solid rgba(217,119,6,0.3)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            borderColor: "rgba(217,119,6,0.3)",
             boxShadow: "0 0 40px rgba(217,119,6,0.15), inset 0 1px 0 rgba(255,255,255,0.05)",
           }}
         >
           <span
+            className="text-2xl font-extrabold sm:text-[28px]"
             style={{
-              fontSize: "28px",
-              fontWeight: 800,
               background: "linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #92400e 100%)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
@@ -897,75 +888,31 @@ function EmptyState() {
 
       {/* Heading */}
       <h1
+        className="mb-3 text-balance text-2xl font-bold leading-tight tracking-tight sm:text-3xl md:text-4xl"
         style={{
-          fontSize: "2rem",
-          fontWeight: 700,
-          marginBottom: "0.75rem",
           background: "linear-gradient(135deg, #ececec 0%, #a3a3a3 100%)",
           WebkitBackgroundClip: "text",
           WebkitTextFillColor: "transparent",
           backgroundClip: "text",
-          letterSpacing: "-0.02em",
-          lineHeight: 1.1,
         }}
       >
         What can I help with today?
       </h1>
 
-      <p
-        style={{
-          maxWidth: "380px",
-          fontSize: "0.9rem",
-          color: "#737373",
-          lineHeight: 1.6,
-          marginBottom: "2.5rem",
-        }}
-      >
+      <p className="mb-8 max-w-sm text-pretty text-sm leading-relaxed text-text-muted sm:mb-10 sm:text-base">
         Ask me anything — I can search the web, write and run code, analyze data, and create rich artifacts.
       </p>
 
       {/* Suggestion pills */}
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.625rem",
-          justifyContent: "center",
-          maxWidth: "440px",
-        }}
-      >
+      <div className="grid w-full max-w-md grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:justify-center">
         {suggestions.map((s) => (
           <button
             key={s.label}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.5rem 1rem",
-              borderRadius: "100px",
-              border: "1px solid #2a2a2a",
-              background: "#181818",
-              color: "#a3a3a3",
-              fontSize: "0.8rem",
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
-            onMouseEnter={(e) => {
-              const el = e.currentTarget as HTMLButtonElement
-              el.style.borderColor = "rgba(217,119,6,0.5)"
-              el.style.color = "#d97706"
-              el.style.background = "rgba(217,119,6,0.06)"
-            }}
-            onMouseLeave={(e) => {
-              const el = e.currentTarget as HTMLButtonElement
-              el.style.borderColor = "#2a2a2a"
-              el.style.color = "#a3a3a3"
-              el.style.background = "#181818"
-            }}
+            onClick={() => handleSuggestion(s.prompt)}
+            className="flex items-center justify-center gap-2 rounded-full border border-border bg-bg-secondary px-4 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:border-accent/50 hover:bg-accent-muted hover:text-accent sm:justify-start sm:py-2"
           >
-            <span>{s.icon}</span>
-            <span>{s.label}</span>
+            <span className="shrink-0">{s.icon}</span>
+            <span className="truncate">{s.label}</span>
           </button>
         ))}
       </div>

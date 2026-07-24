@@ -161,6 +161,25 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
     autoResize()
   }, [value, autoResize])
 
+  // Allow other components (e.g. empty-state suggestions) to prefill the composer
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (typeof detail?.content === "string") {
+        setValue(detail.content)
+        requestAnimationFrame(() => {
+          const el = textareaRef.current
+          if (el) {
+            el.focus()
+            el.setSelectionRange(el.value.length, el.value.length)
+          }
+        })
+      }
+    }
+    window.addEventListener("kyro:prefill-input", handler)
+    return () => window.removeEventListener("kyro:prefill-input", handler)
+  }, [])
+
   const detectTriggers = useCallback(
     (text: string, insertedChar?: string) => {
       const lastChar = insertedChar ?? text.slice(-1)
@@ -483,9 +502,9 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
               }}
             >
               {/* Left controls */}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
                 {/* Plus button */}
-                <div className="relative">
+                <div className="relative shrink-0">
                   <button
                     onClick={() => setShowPlusMenu(!showPlusMenu)}
                     style={{
@@ -584,10 +603,8 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
                 {/* Model selector pill */}
                 <button
                   onClick={() => setModelSelectorOpen(true)}
+                  className="flex shrink-0 items-center gap-1.5 whitespace-nowrap"
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
                     borderRadius: "100px",
                     border: "1px solid #2a2a2a",
                     background: "#161616",
@@ -597,6 +614,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
                     color: "#a3a3a3",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
+                    maxWidth: "40vw",
                   }}
                   onMouseEnter={(e) => {
                     const el = e.currentTarget as HTMLButtonElement
@@ -609,15 +627,15 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
                     el.style.color = "#a3a3a3"
                   }}
                 >
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e" }} />
-                  <span>{selectedModel.name}</span>
-                  <ChevronDown size={12} style={{ color: "#737373" }} />
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
+                  <span className="truncate">{selectedModel.name}</span>
+                  <ChevronDown size={12} style={{ color: "#737373", flexShrink: 0 }} />
                 </button>
 
                 {/* Act / Plan mode switcher */}
                 <div
+                  className="flex shrink-0"
                   style={{
-                    display: "flex",
                     borderRadius: "100px",
                     border: "1px solid #2a2a2a",
                     background: "#161616",
@@ -668,7 +686,7 @@ export function ChatInput({ onFilesSelect, attachedFiles = [], onRemoveFile, tas
               </div>
 
               {/* Right controls */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div className="flex shrink-0 items-center gap-1.5 pl-2">
                 {/* Mic button */}
                 <button
                   style={{
