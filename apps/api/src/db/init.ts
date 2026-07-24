@@ -286,10 +286,41 @@ export async function initDb() {
       `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS is_valid INTEGER DEFAULT 1`,
       `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS updated_at INTEGER DEFAULT (EXTRACT(EPOCH FROM NOW) * 1000)`,
       `ALTER TABLE agents ADD COLUMN IF NOT EXISTS tool_permissions TEXT DEFAULT '{}'`,
+      `ALTER TABLE browser_sessions ADD COLUMN IF NOT EXISTS novnc_port INTEGER`,
     ];
     for (const sql of migrations) {
       await pool.query(sql).catch(() => {});
     }
+
+    // ── RBAC tables (create if not exists) ──────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS roles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        is_system BOOLEAN DEFAULT FALSE,
+        created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS role_permissions (
+        role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        permission TEXT NOT NULL,
+        PRIMARY KEY (role_id, permission)
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_roles (
+        user_id TEXT NOT NULL,
+        role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+        assigned_by TEXT,
+        assigned_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
+        expires_at BIGINT,
+        PRIMARY KEY (user_id, role_id)
+      )
+    `).catch(() => {});
 
     console.log('✅ PostgreSQL database schema created successfully');
     return { success: true };
